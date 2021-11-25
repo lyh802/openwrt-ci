@@ -1,0 +1,97 @@
+From 504ba13c1c166d84d23348485abd0e69caa9e3e4 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:11:36 +0000
+Subject: [PATCH] add OrangePi Prime device
+
+---
+ package/boot/uboot-sunxi/Makefile             |  9 +++++
+ target/linux/sunxi/image/cortexa53.mk         |  7 ++++
+ ...rime_usb_otg_to_peripheral_key_power.patch | 34 +++++++++++++++++++
+ 3 files changed, 50 insertions(+)
+ create mode 100644 target/linux/sunxi/patches-5.4/301-orangepi_prime_usb_otg_to_peripheral_key_power.patch
+
+diff --git a/package/boot/uboot-sunxi/Makefile b/package/boot/uboot-sunxi/Makefile
+index 38147339a4..6913966180 100644
+--- a/package/boot/uboot-sunxi/Makefile
++++ b/package/boot/uboot-sunxi/Makefile
+@@ -295,6 +295,14 @@ define U-Boot/orangepi_pc2
+   UENV:=a64
+ endef
+ 
++define U-Boot/orangepi_prime
++  BUILD_SUBTARGET:=cortexa53
++  NAME:=Xunlong Orange Pi Prime
++  BUILD_DEVICES:=xunlong_orangepi-prime
++  DEPENDS:=+PACKAGE_u-boot-orangepi_prime:arm-trusted-firmware-sunxi
++  UENV:=a64
++endef
++
+ define U-Boot/Bananapi_M2_Ultra
+   BUILD_SUBTARGET:=cortexa7
+   NAME:=Bananapi M2 Ultra
+@@ -340,6 +348,7 @@ UBOOT_TARGETS := \
+ 	orangepi_plus \
+ 	orangepi_2 \
+ 	orangepi_pc2 \
++	orangepi_prime \
+ 	pangolin \
+ 	pine64_plus \
+ 	sopine_baseboard \
+diff --git a/target/linux/sunxi/image/cortexa53.mk b/target/linux/sunxi/image/cortexa53.mk
+index 117d25ea90..b8389da2fc 100644
+--- a/target/linux/sunxi/image/cortexa53.mk
++++ b/target/linux/sunxi/image/cortexa53.mk
+@@ -84,6 +84,13 @@ define Device/xunlong_orangepi-pc2
+ endef
+ TARGET_DEVICES += xunlong_orangepi-pc2
+ 
++define Device/xunlong_orangepi-prime
++  DEVICE_VENDOR := Xunlong
++  DEVICE_MODEL := Orange Pi Prime
++  $(Device/sun50i-h5)
++endef
++TARGET_DEVICES += xunlong_orangepi-prime
++
+ define Device/xunlong_orangepi-zero-plus
+   DEVICE_VENDOR := Xunlong
+   DEVICE_MODEL := Orange Pi Zero Plus
+diff --git a/target/linux/sunxi/patches-5.4/301-orangepi_prime_usb_otg_to_peripheral_key_power.patch b/target/linux/sunxi/patches-5.4/301-orangepi_prime_usb_otg_to_peripheral_key_power.patch
+new file mode 100644
+index 0000000000..1391a133fa
+--- /dev/null
++++ b/target/linux/sunxi/patches-5.4/301-orangepi_prime_usb_otg_to_peripheral_key_power.patch
+@@ -0,0 +1,34 @@
++--- a/arch/arm64/boot/dts/allwinner/sun50i-h5-orangepi-prime.dts
+++++ b/arch/arm64/boot/dts/allwinner/sun50i-h5-orangepi-prime.dts
++@@ -93,7 +93,7 @@
++ 
++ 		sw4 {
++ 			label = "sw4";
++-			linux,code = <BTN_0>;
+++			linux,code = <KEY_POWER>;
++ 			gpios = <&r_pio 0 3 GPIO_ACTIVE_LOW>;
++ 		};
++ 	};
++@@ -204,6 +204,13 @@
++ 	bus-width = <4>;
++ 	non-removable;
++ 	status = "okay";
+++
+++	rtl8723bs: wifi@1 {
+++		reg = <1>;
+++		interrupt-parent = <&r_pio>;
+++		interrupts = <0 7 IRQ_TYPE_LEVEL_LOW>; /* PL7 */
+++		interrupt-names = "host-wake";
+++	};
++ };
++ 
++ &ohci0 {
++@@ -241,7 +248,7 @@
++ };
++ 
++ &usb_otg {
++-	dr_mode = "otg";
+++	dr_mode = "peripheral";
++ 	status = "okay";
++ };
++ 

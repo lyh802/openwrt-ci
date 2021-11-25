@@ -1,0 +1,227 @@
+From 5362f263f102cb3376b8b687ecab1a45227f9427 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:29:24 +0000
+Subject: [PATCH] add rtl8189es driver
+
+---
+ package/kernel/rtl8189es/Makefile             | 55 +++++++++++++++++
+ .../patches/0001-not-use-shell-pwd.patch      | 22 +++++++
+ .../0002-Turned-down-debug-level.patch        | 26 ++++++++
+ ...build-against-openwrt-backports-tree.patch | 17 ++++++
+ .../0004-activate-all-backport-code.patch     | 59 +++++++++++++++++++
+ 5 files changed, 179 insertions(+)
+ create mode 100644 package/kernel/rtl8189es/Makefile
+ create mode 100755 package/kernel/rtl8189es/patches/0001-not-use-shell-pwd.patch
+ create mode 100755 package/kernel/rtl8189es/patches/0002-Turned-down-debug-level.patch
+ create mode 100755 package/kernel/rtl8189es/patches/0003-Fix-build-against-openwrt-backports-tree.patch
+ create mode 100755 package/kernel/rtl8189es/patches/0004-activate-all-backport-code.patch
+
+diff --git a/package/kernel/rtl8189es/Makefile b/package/kernel/rtl8189es/Makefile
+new file mode 100644
+index 0000000000..4f5fbf8e57
+--- /dev/null
++++ b/package/kernel/rtl8189es/Makefile
+@@ -0,0 +1,55 @@
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=rtl8189es
++PKG_RELEASE=1
++
++PKG_LICENSE:=GPLv2
++PKG_LICENSE_FILES:=
++
++PKG_SOURCE_URL:=https://github.com/lyh802/rtl8189ES_linux.git
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_DATE:=2021-10-30
++PKG_SOURCE_VERSION:=4d62118debf0e42542f57863a145fa7f20c71ae8
++PKG_MIRROR_HASH:=79eec4e5ed5485a2d894d92d997ac8565b06fa8fcaebb65ca551e44828a3dd0b
++
++PKG_MAINTAINER:=Hauke Mehrtens <hauke@hauke-m.de>
++PKG_BUILD_PARALLEL:=1
++#PKG_EXTMOD_SUBDIRS:=rtl8189es
++
++STAMP_CONFIGURED_DEPENDS := $(STAGING_DIR)/usr/include/mac80211-backport/backport/autoconf.h
++
++include $(INCLUDE_DIR)/kernel.mk
++include $(INCLUDE_DIR)/package.mk
++
++define KernelPackage/rtl8189es
++  SUBMENU:=Wireless Drivers
++  TITLE:=Realtek RTL8189ES / RTL8189ETV SDIO WiFi
++  DEPENDS:=+kmod-cfg80211 +kmod-mmc +@DRIVER_11N_SUPPORT 
++  FILES:=$(PKG_BUILD_DIR)/8189es.ko
++#  AUTOLOAD:=$(call AutoProbe,rtl8189es)
++  AUTOLOAD:=$(call AutoLoad,50,8189es)
++endef
++
++NOSTDINC_FLAGS = \
++	-I$(PKG_BUILD_DIR) \
++	-I$(PKG_BUILD_DIR)/include \
++	-I$(STAGING_DIR)/usr/include/mac80211-backport \
++	-I$(STAGING_DIR)/usr/include/mac80211-backport/uapi \
++	-I$(STAGING_DIR)/usr/include/mac80211 \
++	-I$(STAGING_DIR)/usr/include/mac80211/uapi \
++	-include backport/backport.h
++
++NOSTDINC_FLAGS+=-DCONFIG_LITTLE_ENDIAN
++NOSTDINC_FLAGS+=-DCONFIG_CONCURRENT_MODE
++NOSTDINC_FLAGS+=-DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -DBUILD_OPENWRT
++
++define Build/Compile
++	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
++		$(KERNEL_MAKE_FLAGS) \
++		M="$(PKG_BUILD_DIR)" \
++		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
++		CONFIG_RTL8189ES=m \
++		modules
++endef
++
++$(eval $(call KernelPackage,rtl8189es))
+diff --git a/package/kernel/rtl8189es/patches/0001-not-use-shell-pwd.patch b/package/kernel/rtl8189es/patches/0001-not-use-shell-pwd.patch
+new file mode 100755
+index 0000000000..52909419f2
+--- /dev/null
++++ b/package/kernel/rtl8189es/patches/0001-not-use-shell-pwd.patch
+@@ -0,0 +1,22 @@
++From 2fa0135094b00e52bfb8ad09837cb5590332b0ac Mon Sep 17 00:00:00 2001
++From: youling257 <youling257@gmail.com>
++Date: Wed, 6 Feb 2019 02:20:49 +0800
++Subject: [PATCH] not use $(shell pwd)
++
++---
++ Makefile | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/Makefile b/Makefile
++index 9662e4e..2b42f83 100644
++--- a/Makefile
+++++ b/Makefile
++@@ -186,7 +186,7 @@ CONFIG_CUSTOMER_HUAWEI_GENERAL = n
++ 
++ CONFIG_DRVEXT_MODULE = n
++ 
++-export TopDIR ?= $(shell pwd)
+++export TopDIR ?= $(src)
++ 
++ ########### COMMON  #################################
++ ifeq ($(CONFIG_GSPI_HCI), y)
+diff --git a/package/kernel/rtl8189es/patches/0002-Turned-down-debug-level.patch b/package/kernel/rtl8189es/patches/0002-Turned-down-debug-level.patch
+new file mode 100755
+index 0000000000..cab76ce2d7
+--- /dev/null
++++ b/package/kernel/rtl8189es/patches/0002-Turned-down-debug-level.patch
+@@ -0,0 +1,26 @@
++From 9a5295fc09b1547ad391236e644cc90a91021328 Mon Sep 17 00:00:00 2001
++From: kimocoder <christian@aircrack-ng.org>
++Date: Sun, 12 Jan 2020 00:03:21 +0000
++Subject: [PATCH] Turned down debug level
++
++---
++ Makefile | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/Makefile b/Makefile
++index 2b42f83..797f6b0 100644
++--- a/Makefile
+++++ b/Makefile
++@@ -90,10 +90,10 @@ CONFIG_IP_R_MONITOR = n #arp VOQ and high rate
++ CONFIG_RTW_UP_MAPPING_RULE = tos
++ 
++ ########################## Debug ###########################
++-CONFIG_RTW_DEBUG = y
+++CONFIG_RTW_DEBUG = n
++ # default log level is _DRV_INFO_ = 4,
++ # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
++-CONFIG_RTW_LOG_LEVEL = 4
+++CONFIG_RTW_LOG_LEVEL = 2
++ 
++ # enable /proc/net/rtlxxxx/ debug interfaces
++ CONFIG_PROC_DEBUG = y
+diff --git a/package/kernel/rtl8189es/patches/0003-Fix-build-against-openwrt-backports-tree.patch b/package/kernel/rtl8189es/patches/0003-Fix-build-against-openwrt-backports-tree.patch
+new file mode 100755
+index 0000000000..8dd095aeb4
+--- /dev/null
++++ b/package/kernel/rtl8189es/patches/0003-Fix-build-against-openwrt-backports-tree.patch
+@@ -0,0 +1,17 @@
++From 8aa824aece160dea0d3e74b5155d6f35361b3316 Mon Sep 17 00:00:00 2001
++From: Ben Greear <greearb@candelatech.com>
++Date: Fri, 9 Nov 2018 16:21:43 -0800
++Subject: [PATCH] Fix build against openwrt backports tree.
++
++Like breaks builds elsewhere, can fix it up later.
++
++Signed-off-by: Ben Greear <greearb@candelatech.com>
++---
++ include/linux/{wireless.h => rtl_wireless.h} | 0
++ 1 file changed, 0 insertions(+), 0 deletions(-)
++ rename include/linux/{wireless.h => rtl_wireless.h} (100%)
++
++diff --git a/include/linux/wireless.h b/include/linux/rtl_wireless.h
++similarity index 100%
++rename from include/linux/wireless.h
++rename to include/linux/rtl_wireless.h
+diff --git a/package/kernel/rtl8189es/patches/0004-activate-all-backport-code.patch b/package/kernel/rtl8189es/patches/0004-activate-all-backport-code.patch
+new file mode 100755
+index 0000000000..38491134cf
+--- /dev/null
++++ b/package/kernel/rtl8189es/patches/0004-activate-all-backport-code.patch
+@@ -0,0 +1,59 @@
++From 5da5ee82383b203807f54210581b4e27c43ed33d Mon Sep 17 00:00:00 2001
++From: Hauke Mehrtens <hauke@hauke-m.de>
++Date: Wed, 27 Sep 2017 23:38:49 +0200
++Subject: [PATCH] activate all backport code
++
++Signed-off-by: lyh802 <lyh802@126.com>
++---
++ os_dep/linux/ioctl_cfg80211.c | 10 +++++-----
++ 1 file changed, 5 insertions(+), 5 deletions(-)
++
++diff --git a/os_dep/linux/ioctl_cfg80211.c b/os_dep/linux/ioctl_cfg80211.c
++index c20a96d..8bc4e69 100644
++--- a/os_dep/linux/ioctl_cfg80211.c
+++++ b/os_dep/linux/ioctl_cfg80211.c
++@@ -234,7 +234,7 @@ static u8 rtw_chbw_to_cfg80211_chan_def(struct wiphy *wiphy, struct cfg80211_cha
++ 
++ 	chdef->chan = chan;
++ 	chdef->center_freq1 = cfreq;
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(BUILD_OPENWRT)
++ 	chdef->freq1_offset = chan->freq_offset;
++ #endif
++ 	chdef->center_freq2 = 0;
++@@ -7621,7 +7621,7 @@ static void cfg80211_rtw_mgmt_frame_register(struct wiphy *wiphy,
++ #else
++ 	struct net_device *ndev,
++ #endif
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(BUILD_OPENWRT)
++ 	struct mgmt_frame_regs *upd)
++ #else
++ 	u16 frame_type, bool reg)
++@@ -7641,7 +7641,7 @@ static void cfg80211_rtw_mgmt_frame_register(struct wiphy *wiphy,
++ 	pwdev_priv = adapter_wdev_data(adapter);
++ 
++ #ifdef CONFIG_DEBUG_CFG80211
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(BUILD_OPENWRT)
++ 	RTW_INFO(FUNC_ADPT_FMT" old_regs:%x, new_regs:%x\n", FUNC_ADPT_ARG(adapter),
++ 		pwdev_priv->report_mgmt, upd->interface_stypes);
++ #else
++@@ -7650,7 +7650,7 @@ static void cfg80211_rtw_mgmt_frame_register(struct wiphy *wiphy,
++ #endif
++ #endif
++ 
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(BUILD_OPENWRT)
++ 	pwdev_priv->report_mgmt = upd->interface_stypes & (
++ #ifdef not_yet
++ 		BIT(IEEE80211_STYPE_PROBE_REQ >> 4) |
++@@ -10068,7 +10068,7 @@ static struct cfg80211_ops rtw_cfg80211_ops = {
++ 
++ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)) || defined(COMPAT_KERNEL_RELEASE)
++ 	.mgmt_tx = cfg80211_rtw_mgmt_tx,
++-	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+++	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(BUILD_OPENWRT)
++ 	.update_mgmt_frame_registrations = cfg80211_rtw_mgmt_frame_register,
++ 	#else
++ 	.mgmt_frame_register = cfg80211_rtw_mgmt_frame_register,

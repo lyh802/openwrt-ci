@@ -1,0 +1,140 @@
+From 378d70f9262c243ce4eee60989a32f55038ceb64 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:22:22 +0000
+Subject: [PATCH] config package
+
+---
+ net/mwan3/files/etc/config/mwan3      | 26 +++++++++-----------------
+ net/nginx-util/src/nginx-ssl-util.hpp |  4 ++--
+ net/nginx-util/src/regex-pcre.hpp     |  2 +-
+ net/tinyproxy/files/tinyproxy.config  |  3 ++-
+ utils/watchcat/files/watchcat.config  |  2 +-
+ utils/watchcat/files/watchcat.init    |  2 +-
+ 6 files changed, 16 insertions(+), 23 deletions(-)
+
+diff --git a/net/mwan3/files/etc/config/mwan3 b/net/mwan3/files/etc/config/mwan3
+index 54c449fdf..daa102e14 100644
+--- a/net/mwan3/files/etc/config/mwan3
++++ b/net/mwan3/files/etc/config/mwan3
+@@ -5,38 +5,30 @@ config globals 'globals'
+ 	option mmx_mask '0x3F00'
+ 
+ config interface 'wan'
+-	option enabled '1'
+-	list track_ip '8.8.4.4'
+-	list track_ip '8.8.8.8'
+-	list track_ip '208.67.222.222'
+-	list track_ip '208.67.220.220'
++	option enabled '0'
++	list track_ip '119.29.29.29'
++	list track_ip '101.6.6.6'
+ 	option family 'ipv4'
+ 	option reliability '2'
+ 
+ config interface 'wan6'
+ 	option enabled '0'
+-	list track_ip '2001:4860:4860::8844'
+-	list track_ip '2001:4860:4860::8888'
+-	list track_ip '2620:0:ccd::2'
+-	list track_ip '2620:0:ccc::2'
++	list track_ip '2402:4e00::'
++	list track_ip '2001:da8::666'
+ 	option family 'ipv6'
+ 	option reliability '2'
+ 
+ config interface 'wanb'
+ 	option enabled '0'
+-	list track_ip '8.8.4.4'
+-	list track_ip '8.8.8.8'
+-	list track_ip '208.67.222.222'
+-	list track_ip '208.67.220.220'
++	list track_ip '119.29.29.29'
++	list track_ip '101.6.6.6'
+ 	option family 'ipv4'
+ 	option reliability '1'
+ 
+ config interface 'wanb6'
+ 	option enabled '0'
+-	list track_ip '2001:4860:4860::8844'
+-	list track_ip '2001:4860:4860::8888'
+-	list track_ip '2620:0:ccd::2'
+-	list track_ip '2620:0:ccc::2'
++	list track_ip '2402:4e00::'
++	list track_ip '2001:da8::666'
+ 	option family 'ipv6'
+ 	option reliability '1'
+ 
+diff --git a/net/nginx-util/src/nginx-ssl-util.hpp b/net/nginx-util/src/nginx-ssl-util.hpp
+index 5a64b000a..7ced41af7 100644
+--- a/net/nginx-util/src/nginx-ssl-util.hpp
++++ b/net/nginx-util/src/nginx-ssl-util.hpp
+@@ -168,9 +168,9 @@ static constexpr auto _escape = _Line{
+             switch (c) {
+                 case '^':
+                     ret += '\\';
+-                    ret += c;
+-                    break;
++                /* fall through */
+                 case '_':
++                /* fall through */
+                 case '-':
+                     ret += c;
+                     break;
+diff --git a/net/nginx-util/src/regex-pcre.hpp b/net/nginx-util/src/regex-pcre.hpp
+index f63d5f90c..b5f0fa587 100644
+--- a/net/nginx-util/src/regex-pcre.hpp
++++ b/net/nginx-util/src/regex-pcre.hpp
+@@ -271,7 +271,7 @@ auto smatch::format(const std::string& fmt) const
+                 }  // else:
+ 
+                 ret += '$';
+-                [[fallthrough]];
++                /* fall through */
+ 
+             case '$':  // escaped
+                 ret += chr;
+diff --git a/net/tinyproxy/files/tinyproxy.config b/net/tinyproxy/files/tinyproxy.config
+index ac7b46ff0..82b350715 100644
+--- a/net/tinyproxy/files/tinyproxy.config
++++ b/net/tinyproxy/files/tinyproxy.config
+@@ -3,7 +3,7 @@ config tinyproxy
+ #
+ # Enable the proxy
+ #
+-option enabled 0
++option enabled 1
+ 
+ #
+ # Name of the user the tinyproxy daemon should switch to after the port
+@@ -187,6 +187,7 @@ option ViaProxyName "tinyproxy"
+ #
+ # The following two ports are used by SSL.
+ #
++list ConnectPort 80
+ list ConnectPort 443
+ list ConnectPort 563
+ 
+diff --git a/utils/watchcat/files/watchcat.config b/utils/watchcat/files/watchcat.config
+index ed6544cc3..4f7b987db 100644
+--- a/utils/watchcat/files/watchcat.config
++++ b/utils/watchcat/files/watchcat.config
+@@ -1,5 +1,5 @@
+ config watchcat
+ 	option period '6h'
+ 	option mode 'ping_reboot'
+-	option pinghosts '8.8.8.8'
++	option pinghosts '119.29.29.29'
+ 	option forcedelay '30'
+diff --git a/utils/watchcat/files/watchcat.init b/utils/watchcat/files/watchcat.init
+index a48d3fded..089e3e5bc 100644
+--- a/utils/watchcat/files/watchcat.init
++++ b/utils/watchcat/files/watchcat.init
+@@ -34,7 +34,7 @@ config_watchcat() {
+ 	# Read config
+ 	config_get period "$1" period "120"
+ 	config_get mode "$1" mode "ping_reboot"
+-	config_get pinghosts "$1" pinghosts "8.8.8.8"
++	config_get pinghosts "$1" pinghosts "119.29.29.29"
+ 	config_get pingperiod "$1" pingperiod "60"
+ 	config_get forcedelay "$1" forcedelay "60"
+ 	config_get pingsize "$1" pingsize "standard"

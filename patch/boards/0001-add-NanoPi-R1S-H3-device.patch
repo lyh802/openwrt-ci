@@ -1,0 +1,227 @@
+From 1c650f60cbe1dbd77a739a6d3ed54d96e7abbec1 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 05:56:23 +0000
+Subject: [PATCH] add NanoPi R1S H3 device
+
+---
+ ...2-sunxi-h3-add-support-for-nanopi-r1.patch | 42 ++++++++++++++++---
+ target/linux/sunxi/image/cortexa7.mk          |  2 +-
+ ...0-sunxi-h3-add-support-for-nanopi-r1.patch | 42 ++++++++++++++++---
+ 3 files changed, 73 insertions(+), 13 deletions(-)
+
+diff --git a/package/boot/uboot-sunxi/patches/252-sunxi-h3-add-support-for-nanopi-r1.patch b/package/boot/uboot-sunxi/patches/252-sunxi-h3-add-support-for-nanopi-r1.patch
+index 0db7be5421..77a61b2da4 100644
+--- a/package/boot/uboot-sunxi/patches/252-sunxi-h3-add-support-for-nanopi-r1.patch
++++ b/package/boot/uboot-sunxi/patches/252-sunxi-h3-add-support-for-nanopi-r1.patch
+@@ -24,7 +24,7 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+  	sun8i-h3-orangepi-one.dtb \
+ --- /dev/null
+ +++ b/arch/arm/dts/sun8i-h3-nanopi-r1.dts
+-@@ -0,0 +1,146 @@
++@@ -0,0 +1,176 @@
+ +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+ +/*
+ + * Copyright (C) 2019 Igor Pecovnik <igor@armbian.com>
+@@ -108,12 +108,23 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +
+ +&ehci1 {
+ +	status = "okay";
+++
+++	usb-eth@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8153";
+++
+++		realtek,led-data = <0x78>;
+++	};
+ +};
+ +
+ +&ehci2 {
+ +	status = "okay";
+ +};
+ +
+++&ehci3 {
+++	status = "disabled";
+++};
+++
+ +&emac {
+ +	pinctrl-names = "default";
+ +	pinctrl-0 = <&emac_rgmii_pins>;
+@@ -124,7 +135,7 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +};
+ +
+ +&external_mdio {
+-+	ext_rgmii_phy: ethernet-phy@1 {
+++	ext_rgmii_phy: ethernet-phy@7 {
+ +		compatible = "ethernet-phy-ieee802.3-c22";
+ +		reg = <7>;
+ +	};
+@@ -138,9 +149,9 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +	non-removable;
+ +	status = "okay";
+ +
+-+	sdio_wifi: sdio_wifi@1 {
+++	rtl8189etv: sdio_wifi@1 {
+ +		reg = <1>;
+-+		compatible = "brcm,bcm4329-fmac";
+++		compatible = "realtek,rtl8189es";
+ +		interrupt-parent = <&pio>;
+ +		interrupts = <6 10 IRQ_TYPE_LEVEL_LOW>;
+ +		interrupt-names = "host-wake";
+@@ -154,23 +165,42 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +	vqmmc-supply = <&reg_vcc3v3>;
+ +	bus-width = <8>;
+ +	non-removable;
+-+	status = "okay";
+++	status = "disabled";
+ +};
+ +
+ +&ohci1 {
+-+	status = "okay";
+++	status = "disabled";
+ +};
+ +
+ +&ohci2 {
+ +	status = "okay";
+ +};
+ +
+++&ohci3 {
+++	status = "disabled";
+++};
+++
+ +&r_pio {
+ +	sw_r_npi: key_pins {
+ +		pins = "PL3";
+ +		function = "gpio_in";
+ +	};
+ +};
+++
+++&usb_otg {
+++	dr_mode = "peripheral";
+++	status = "okay";
+++};
+++
+++&usbphy {
+++	/*
+++	 * USB Type-A port VBUS is always on. However, MicroUSB VBUS can only
+++	 * power up the board; when it's used as OTG port, this VBUS is
+++	 * always off even if the board is powered via GPIO pins.
+++	 */
+++	status = "okay";
+++	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
+++};
+ --- /dev/null
+ +++ b/configs/nanopi_r1_defconfig
+ @@ -0,0 +1,22 @@
+diff --git a/target/linux/sunxi/image/cortexa7.mk b/target/linux/sunxi/image/cortexa7.mk
+index b55e93b7fb..48fc198f39 100644
+--- a/target/linux/sunxi/image/cortexa7.mk
++++ b/target/linux/sunxi/image/cortexa7.mk
+@@ -48,7 +48,7 @@ define Device/friendlyarm_nanopi-r1
+   DEVICE_VENDOR := FriendlyARM
+   DEVICE_MODEL := NanoPi R1
+   DEVICE_PACKAGES := kmod-rtc-sunxi kmod-usb-net-rtl8152 kmod-leds-gpio \
+-	kmod-brcmfmac brcmfmac-firmware-43430-sdio wpad-basic-wolfssl
++	kmod-rtl8189es wpad-basic-wolfssl
+   SOC := sun8i-h3
+ endef
+ TARGET_DEVICES += friendlyarm_nanopi-r1
+diff --git a/target/linux/sunxi/patches-5.4/100-sunxi-h3-add-support-for-nanopi-r1.patch b/target/linux/sunxi/patches-5.4/100-sunxi-h3-add-support-for-nanopi-r1.patch
+index 834ea153c8..280d2bb859 100644
+--- a/target/linux/sunxi/patches-5.4/100-sunxi-h3-add-support-for-nanopi-r1.patch
++++ b/target/linux/sunxi/patches-5.4/100-sunxi-h3-add-support-for-nanopi-r1.patch
+@@ -37,7 +37,7 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+  	sun8i-h3-orangepi-one.dtb \
+ --- /dev/null
+ +++ b/arch/arm/boot/dts/sun8i-h3-nanopi-r1.dts
+-@@ -0,0 +1,146 @@
++@@ -0,0 +1,176 @@
+ +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+ +/*
+ + * Copyright (C) 2019 Igor Pecovnik <igor@armbian.com>
+@@ -121,12 +121,23 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +
+ +&ehci1 {
+ +	status = "okay";
+++
+++	usb-eth@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8153";
+++
+++		realtek,led-data = <0x78>;
+++	};
+ +};
+ +
+ +&ehci2 {
+ +	status = "okay";
+ +};
+ +
+++&ehci3 {
+++	status = "disabled";
+++};
+++
+ +&emac {
+ +	pinctrl-names = "default";
+ +	pinctrl-0 = <&emac_rgmii_pins>;
+@@ -137,7 +148,7 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +};
+ +
+ +&external_mdio {
+-+	ext_rgmii_phy: ethernet-phy@1 {
+++	ext_rgmii_phy: ethernet-phy@7 {
+ +		compatible = "ethernet-phy-ieee802.3-c22";
+ +		reg = <7>;
+ +	};
+@@ -151,9 +162,9 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +	non-removable;
+ +	status = "okay";
+ +
+-+	sdio_wifi: sdio_wifi@1 {
+++	rtl8189etv: sdio_wifi@1 {
+ +		reg = <1>;
+-+		compatible = "brcm,bcm4329-fmac";
+++		compatible = "realtek,rtl8189es";
+ +		interrupt-parent = <&pio>;
+ +		interrupts = <6 10 IRQ_TYPE_LEVEL_LOW>;
+ +		interrupt-names = "host-wake";
+@@ -167,20 +178,39 @@ Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+ +	vqmmc-supply = <&reg_vcc3v3>;
+ +	bus-width = <8>;
+ +	non-removable;
+-+	status = "okay";
+++	status = "disabled";
+ +};
+ +
+ +&ohci1 {
+-+	status = "okay";
+++	status = "disabled";
+ +};
+ +
+ +&ohci2 {
+ +	status = "okay";
+ +};
+ +
+++&ohci3 {
+++	status = "disabled";
+++};
+++
+ +&r_pio {
+ +	sw_r_npi: key_pins {
+ +		pins = "PL3";
+ +		function = "gpio_in";
+ +	};
+ +};
+++
+++&usb_otg {
+++	dr_mode = "peripheral";
+++	status = "okay";
+++};
+++
+++&usbphy {
+++	/*
+++	 * USB Type-A port VBUS is always on. However, MicroUSB VBUS can only
+++	 * power up the board; when it's used as OTG port, this VBUS is
+++	 * always off even if the board is powered via GPIO pins.
+++	 */
+++	status = "okay";
+++	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
+++};

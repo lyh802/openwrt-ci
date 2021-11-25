@@ -1,0 +1,77 @@
+From b929408ea44903bdb078c3141092066d4d095ebe Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:41:43 +0000
+Subject: [PATCH] config mac80211
+
+---
+ .../mac80211/files/lib/netifd/wireless/mac80211.sh   | 12 ++++++------
+ package/kernel/mac80211/files/lib/wifi/mac80211.sh   |  1 +
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh b/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
+index 9a9c35fb5f..eef1eb0f33 100644
+--- a/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
+@@ -506,7 +506,7 @@ mac80211_iw_interface_add() {
+ 	}
+ 
+ 	[ "$rc" = 233 ] && {
+-		iw dev "$ifname" del >/dev/null 2>&1
++		#iw dev "$ifname" del >/dev/null 2>&1
+ 		[ "$?" = 0 ] && {
+ 			sleep 1
+ 
+@@ -629,12 +629,12 @@ mac80211_setup_supplicant() {
+ 	[ "$enable" = 0 ] && {
+ 		ubus call wpa_supplicant.${phy} config_remove "{\"iface\":\"$ifname\"}"
+ 		ip link set dev "$ifname" down
+-		iw dev "$ifname" del
++		#iw dev "$ifname" del
+ 		return 0
+ 	}
+ 
+ 	wpa_supplicant_prepare_interface "$ifname" nl80211 || {
+-		iw dev "$ifname" del
++		#iw dev "$ifname" del
+ 		return 1
+ 	}
+ 	if [ "$mode" = "sta" ]; then
+@@ -666,7 +666,7 @@ mac80211_setup_supplicant_noctl() {
+ 	local enable=$1
+ 	local spobj="$(ubus -S list | grep wpa_supplicant.${ifname})"
+ 	wpa_supplicant_prepare_interface "$ifname" nl80211 || {
+-		iw dev "$ifname" del
++		#iw dev "$ifname" del
+ 		return 1
+ 	}
+ 
+@@ -867,7 +867,7 @@ mac80211_vap_cleanup() {
+ 	for wdev in $vaps; do
+ 		[ "$service" != "none" ] && ubus call ${service} config_remove "{\"iface\":\"$wdev\"}"
+ 		ip link set dev "$wdev" down 2>/dev/null
+-		iw dev "$wdev" del
++		#iw dev "$wdev" del
+ 	done
+ }
+ 
+@@ -928,7 +928,7 @@ drv_mac80211_setup() {
+ 		done
+ 		if [ "$found" = "0" ]; then
+ 			ip link set dev "$wdev" down
+-			iw dev "$wdev" del
++			#iw dev "$wdev" del
+ 		fi
+ 	done
+ 
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index f5f0dd8495..278f447d69 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -107,6 +107,7 @@ detect_mac80211() {
+ 			set wireless.radio${devidx}=wifi-device
+ 			set wireless.radio${devidx}.type=mac80211
+ 			set wireless.radio${devidx}.country=CN
++			set wireless.radio${devidx}.phy=${dev}
+ 			set wireless.radio${devidx}.channel=${channel}
+ 			set wireless.radio${devidx}.hwmode=11${mode_band}
+ 			${dev_id}

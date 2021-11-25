@@ -1,0 +1,653 @@
+From 4425fb962241c3e58d5a2c2458a826fccac7bcf4 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:09:52 +0000
+Subject: [PATCH] add NanoPi R1S H5 device
+
+---
+ package/boot/uboot-sunxi/Makefile             |   9 +
+ ...d-support-for-FriendlyARM-NanoPi-R1S.patch | 270 ++++++++++++++++++
+ .../sunxi/base-files/etc/board.d/01_leds      |   3 +-
+ .../sunxi/base-files/etc/board.d/02_network   |   3 +-
+ target/linux/sunxi/cortexa53/config-5.4       |   1 +
+ target/linux/sunxi/image/cortexa53.mk         |  10 +
+ ...d-support-for-friendlyarm-nanopi-r1s.patch | 266 +++++++++++++++++
+ 7 files changed, 560 insertions(+), 2 deletions(-)
+ create mode 100644 package/boot/uboot-sunxi/patches/253-sunxi-add-support-for-FriendlyARM-NanoPi-R1S.patch
+ create mode 100644 target/linux/sunxi/patches-5.4/101-sunxi-add-support-for-friendlyarm-nanopi-r1s.patch
+
+diff --git a/package/boot/uboot-sunxi/Makefile b/package/boot/uboot-sunxi/Makefile
+index 38147339a4..025f2063d8 100644
+--- a/package/boot/uboot-sunxi/Makefile
++++ b/package/boot/uboot-sunxi/Makefile
+@@ -256,6 +256,14 @@ define U-Boot/nanopi_neo2
+   UENV:=a64
+ endef
+ 
++define U-Boot/nanopi_r1s
++  BUILD_SUBTARGET:=cortexa53
++  NAME:=NanoPi R1S (H5)
++  BUILD_DEVICES:=friendlyarm_nanopi-r1s
++  DEPENDS:=+PACKAGE_u-boot-nanopi_r1s:arm-trusted-firmware-sunxi
++  UENV:=a64
++endef
++
+ define U-Boot/pine64_plus
+   BUILD_SUBTARGET:=cortexa53
+   NAME:=Pine64 Plus A64
+@@ -331,6 +339,7 @@ UBOOT_TARGETS := \
+ 	nanopi_neo_air \
+ 	nanopi_neo_plus2 \
+ 	nanopi_neo2 \
++	nanopi_r1s \
+ 	nanopi_r1 \
+ 	orangepi_zero \
+ 	orangepi_r1 \
+diff --git a/package/boot/uboot-sunxi/patches/253-sunxi-add-support-for-FriendlyARM-NanoPi-R1S.patch b/package/boot/uboot-sunxi/patches/253-sunxi-add-support-for-FriendlyARM-NanoPi-R1S.patch
+new file mode 100644
+index 0000000000..5f589aeb3a
+--- /dev/null
++++ b/package/boot/uboot-sunxi/patches/253-sunxi-add-support-for-FriendlyARM-NanoPi-R1S.patch
+@@ -0,0 +1,270 @@
++From e2e75516ba66e81763adddb70a471868594342d7 Mon Sep 17 00:00:00 2001
++From: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
++Date: Mon, 12 Oct 2020 18:39:53 +0000
++Subject: [PATCH] sunxi: add support for FriendlyARM NanoPi R1S
++
++Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
++---
++ arch/arm/dts/Makefile                 |   1 +
++ arch/arm/dts/sun50i-h5-nanopi-r1s.dts | 215 ++++++++++++++++++++++++++
++ configs/nanopi_r1s_defconfig          |  14 ++
++ 3 files changed, 230 insertions(+)
++ create mode 100644 arch/arm/dts/sun50i-h5-nanopi-r1s.dts
++ create mode 100644 configs/nanopi_r1s_defconfig
++
++--- a/arch/arm/dts/Makefile
+++++ b/arch/arm/dts/Makefile
++@@ -552,6 +552,7 @@ dtb-$(CONFIG_MACH_SUN50I_H5) += \
++ 	sun50i-h5-libretech-all-h3-it.dtb \
++ 	sun50i-h5-libretech-all-h5-cc.dtb \
++ 	sun50i-h5-nanopi-neo2.dtb \
+++	sun50i-h5-nanopi-r1s.dtb \
++ 	sun50i-h5-nanopi-neo-plus2.dtb \
++ 	sun50i-h5-orangepi-zero-plus.dtb \
++ 	sun50i-h5-orangepi-pc2.dtb \
++--- /dev/null
+++++ b/arch/arm/dts/sun50i-h5-nanopi-r1s.dts
++@@ -0,0 +1,226 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Copyright (C) 2019 Igor Pecovnik <igor@armbian.com>
+++ * Copyright (C) 2020 Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+++ */
+++
+++/dts-v1/;
+++#include "sun50i-h5.dtsi"
+++
+++#include <dt-bindings/gpio/gpio.h>
+++#include <dt-bindings/input/input.h>
+++
+++/ {
+++	model = "FriendlyARM NanoPi R1S";
+++	compatible = "friendlyarm,nanopi-r1s", "allwinner,sun50i-h5";
+++
+++	aliases {
+++		ethernet0 = &emac;
+++		serial0 = &uart0;
+++	};
+++
+++	chosen {
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	reg_gmac_3v3: gmac-3v3 {
+++		compatible = "regulator-fixed";
+++		regulator-name = "gmac-3v3";
+++		regulator-min-microvolt = <3300000>;
+++		regulator-max-microvolt = <3300000>;
+++		startup-delay-us = <100000>;
+++		enable-active-high;
+++		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>;
+++	};
+++
+++	reg_vcc3v3: vcc3v3 {
+++		compatible = "regulator-fixed";
+++		regulator-name = "vcc3v3";
+++		regulator-min-microvolt = <3300000>;
+++		regulator-max-microvolt = <3300000>;
+++	};
+++
+++	reg_usb0_vbus: usb0-vbus {
+++		compatible = "regulator-fixed";
+++		regulator-name = "usb0-vbus";
+++		regulator-min-microvolt = <5000000>;
+++		regulator-max-microvolt = <5000000>;
+++		enable-active-high;
+++		gpio = <&r_pio 0 2 GPIO_ACTIVE_HIGH>; /* PL2 */
+++		status = "okay";
+++	};
+++
+++	vdd_cpux: gpio-regulator {
+++		compatible = "regulator-gpio";
+++		pinctrl-names = "default";
+++		regulator-name = "vdd-cpux";
+++		regulator-type = "voltage";
+++		regulator-boot-on;
+++		regulator-always-on;
+++		regulator-min-microvolt = <1100000>;
+++		regulator-max-microvolt = <1300000>;
+++		regulator-ramp-delay = <50>;
+++		gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>;
+++		gpios-states = <0x1>;
+++		states = <1100000 0x0
+++			  1300000 0x1>;
+++	};
+++
+++	wifi_pwrseq: wifi_pwrseq {
+++		compatible = "mmc-pwrseq-simple";
+++		pinctrl-names = "default";
+++		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>;
+++	};
+++
+++	leds {
+++		compatible = "gpio-leds";
+++
+++		status {
+++			label = "nanopi:red:status";
+++			gpios = <&pio 0 10 GPIO_ACTIVE_HIGH>;
+++			linux,default-trigger = "heartbeat";
+++		};
+++
+++		wan {
+++			label = "nanopi:green:wan";
+++			gpios = <&pio 6 11 GPIO_ACTIVE_HIGH>;
+++		};
+++
+++		lan {
+++			label = "nanopi:green:lan";
+++			gpios = <&pio 0 9 GPIO_ACTIVE_HIGH>;
+++		};
+++	};
+++
+++	r_gpio_keys {
+++		compatible = "gpio-keys";
+++		pinctrl-names = "default";
+++		pinctrl-0 = <&sw_r_npi>;
+++
+++		reset {
+++			label = "reset";
+++			linux,code = <KEY_RESTART>;
+++			gpios = <&r_pio 0 3 GPIO_ACTIVE_LOW>;
+++		};
+++	};
+++};
+++
+++&cpu0 {
+++	cpu-supply = <&vdd_cpux>;
+++};
+++
+++&ehci1 {
+++	status = "okay";
+++
+++	usb-eth@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8153";
+++
+++		realtek,led-data = <0x78>;
+++	};
+++};
+++
+++&ehci2 {
+++	status = "okay";
+++};
+++
+++&ehci3 {
+++	status = "disabled";
+++};
+++
+++&emac {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&emac_rgmii_pins>;
+++	phy-supply = <&reg_gmac_3v3>;
+++	phy-handle = <&ext_rgmii_phy>;
+++	phy-mode = "rgmii";
+++	status = "okay";
+++};
+++
+++&external_mdio {
+++	ext_rgmii_phy: ethernet-phy@7 {
+++		compatible = "ethernet-phy-ieee802.3-c22";
+++		reg = <7>;
+++	};
+++};
+++
+++&i2c0 {
+++	status = "okay";
+++
+++	eeprom@51 {
+++		compatible = "microchip,24c02";
+++		reg = <0x51>;
+++		pagesize = <16>;
+++	};
+++};
+++
+++&mmc0 {
+++	vmmc-supply = <&reg_vcc3v3>;
+++	bus-width = <4>;
+++	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
+++	status = "okay";
+++};
+++
+++&mmc1 {
+++	vmmc-supply = <&reg_vcc3v3>;
+++	vqmmc-supply = <&reg_vcc3v3>;
+++	mmc-pwrseq = <&wifi_pwrseq>;
+++	bus-width = <4>;
+++	non-removable;
+++	status = "okay";
+++
+++	rtl8189etv: sdio_wifi@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8189es";
+++		interrupt-parent = <&pio>;
+++		interrupts = <6 10 IRQ_TYPE_LEVEL_LOW>;
+++		interrupt-names = "host-wake";
+++	};
+++};
+++
+++&mmc2 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&mmc2_8bit_pins>;
+++	vmmc-supply = <&reg_vcc3v3>;
+++	vqmmc-supply = <&reg_vcc3v3>;
+++	bus-width = <8>;
+++	non-removable;
+++	status = "disabled";
+++};
+++
+++&ohci1 {
+++	status = "disabled";
+++};
+++
+++&ohci2 {
+++	status = "okay";
+++};
+++
+++&ohci3 {
+++	status = "disabled";
+++};
+++
+++&r_pio {
+++	sw_r_npi: key_pins {
+++		pins = "PL3";
+++		function = "gpio_in";
+++	};
+++};
+++
+++&uart0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&uart0_pa_pins>;
+++	status = "okay";
+++};
+++
+++&usb_otg {
+++	dr_mode = "peripheral";
+++	status = "okay";
+++};
+++
+++&usbphy {
+++	/* USB Type-A port's VBUS is always on */
+++	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
+++	usb0_vbus-supply = <&reg_usb0_vbus>;
+++	status = "okay";
+++};
++--- /dev/null
+++++ b/configs/nanopi_r1s_defconfig
++@@ -0,0 +1,14 @@
+++CONFIG_ARM=y
+++CONFIG_ARCH_SUNXI=y
+++CONFIG_SPL=y
+++CONFIG_MACH_SUN50I_H5=y
+++CONFIG_DRAM_CLK=408
+++CONFIG_DRAM_ZQ=3881977
+++# CONFIG_DRAM_ODT_EN is not set
+++CONFIG_MACPWR="PD6"
+++CONFIG_MMC_SUNXI_SLOT_EXTRA=2
+++# CONFIG_SYS_MALLOC_CLEAR_ON_INIT is not set
+++CONFIG_DEFAULT_DEVICE_TREE="sun50i-h5-nanopi-r1s"
+++CONFIG_SUN8I_EMAC=y
+++CONFIG_USB_EHCI_HCD=y
+++CONFIG_USB_OHCI_HCD=y
+diff --git a/target/linux/sunxi/base-files/etc/board.d/01_leds b/target/linux/sunxi/base-files/etc/board.d/01_leds
+index 32fa00f8a2..d51dd7083f 100755
+--- a/target/linux/sunxi/base-files/etc/board.d/01_leds
++++ b/target/linux/sunxi/base-files/etc/board.d/01_leds
+@@ -8,7 +8,8 @@ boardname="${board##*,}"
+ board_config_update
+ 
+ case $board in
+-friendlyarm,nanopi-r1)
++friendlyarm,nanopi-r1|\
++friendlyarm,nanopi-r1s)
+ 	ucidef_set_led_netdev "wan" "WAN" "nanopi:green:wan" "eth0"
+ 	ucidef_set_led_netdev "lan" "LAN" "nanopi:green:lan" "eth1"
+ 	;;
+diff --git a/target/linux/sunxi/base-files/etc/board.d/02_network b/target/linux/sunxi/base-files/etc/board.d/02_network
+index 08d31caadc..40daccf408 100755
+--- a/target/linux/sunxi/base-files/etc/board.d/02_network
++++ b/target/linux/sunxi/base-files/etc/board.d/02_network
+@@ -8,7 +8,8 @@
+ board_config_update
+ 
+ case $(board_name) in
+-friendlyarm,nanopi-r1)
++friendlyarm,nanopi-r1|\
++friendlyarm,nanopi-r1s)
+ 	ucidef_set_interfaces_lan_wan "eth1" "eth0"
+ 	;;
+ lamobo,lamobo-r1)
+diff --git a/target/linux/sunxi/cortexa53/config-5.4 b/target/linux/sunxi/cortexa53/config-5.4
+index 203ab9fa38..516ccb5f32 100644
+--- a/target/linux/sunxi/cortexa53/config-5.4
++++ b/target/linux/sunxi/cortexa53/config-5.4
+@@ -72,6 +72,7 @@ CONFIG_CAVIUM_TX2_ERRATUM_219=y
+ CONFIG_DMA_DIRECT_REMAP=y
+ CONFIG_DRM_RCAR_WRITEBACK=y
+ CONFIG_DWMAC_SUN8I=y
++CONFIG_EEPROM_AT24=y
+ CONFIG_EFI_EARLYCON=y
+ # CONFIG_FLATMEM_MANUAL is not set
+ CONFIG_FRAME_POINTER=y
+diff --git a/target/linux/sunxi/image/cortexa53.mk b/target/linux/sunxi/image/cortexa53.mk
+index 117d25ea90..76837b42ba 100644
+--- a/target/linux/sunxi/image/cortexa53.mk
++++ b/target/linux/sunxi/image/cortexa53.mk
+@@ -35,6 +35,16 @@ define Device/friendlyarm_nanopi-neo2
+ endef
+ TARGET_DEVICES += friendlyarm_nanopi-neo2
+ 
++define Device/friendlyarm_nanopi-r1s
++  DEVICE_VENDOR := FriendlyARM
++  DEVICE_MODEL := NanoPi R1S
++  DEVICE_PACKAGES := kmod-rtc-sunxi kmod-usb-net-rtl8152 kmod-leds-gpio \
++	kmod-rtl8189es wpad-basic-wolfssl
++  SUPPORTED_DEVICES:=nanopi-r1s
++  $(Device/sun50i-h5)
++endef
++TARGET_DEVICES += friendlyarm_nanopi-r1s
++
+ define Device/libretech_all-h3-cc-h5
+   DEVICE_VENDOR := Libre Computer
+   DEVICE_MODEL := ALL-H3-CC
+diff --git a/target/linux/sunxi/patches-5.4/101-sunxi-add-support-for-friendlyarm-nanopi-r1s.patch b/target/linux/sunxi/patches-5.4/101-sunxi-add-support-for-friendlyarm-nanopi-r1s.patch
+new file mode 100644
+index 0000000000..6736911bf8
+--- /dev/null
++++ b/target/linux/sunxi/patches-5.4/101-sunxi-add-support-for-friendlyarm-nanopi-r1s.patch
+@@ -0,0 +1,266 @@
++From 607663ba8c0f9b5de941da594a4ad182bcd94f9f Mon Sep 17 00:00:00 2001
++From: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
++Date: Mon, 12 Oct 2020 05:24:51 +0000
++Subject: [PATCH] sunxi: add support for friendlyarm nanopi r1s
++
++Signed-off-by: Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
++---
++ .../devicetree/bindings/arm/sunxi.yaml        |   5 +
++ arch/arm64/boot/dts/allwinner/Makefile        |   1 +
++ arch/arm64/boot/dts/allwinner/sun50i-h5-nanopi-r1s.dts    | 215 ++++++++++++++++++
++ 3 files changed, 221 insertions(+)
++ create mode 100644 arch/arm64/boot/dts/allwinner/sun50i-h5-nanopi-r1s.dts
++
++--- a/Documentation/devicetree/bindings/arm/sunxi.yaml
+++++ b/Documentation/devicetree/bindings/arm/sunxi.yaml
++@@ -231,6 +231,11 @@ properties:
++           - const: friendlyarm,nanopi-neo2
++           - const: allwinner,sun50i-h5
++ 
+++      - description: FriendlyARM NanoPi R1S
+++        items:
+++          - const: friendlyarm,nanopi-r1s
+++          - const: allwinner,sun50i-h5
+++
++       - description: FriendlyARM NanoPi Neo Air
++         items:
++           - const: friendlyarm,nanopi-neo-air
++--- a/arch/arm64/boot/dts/allwinner/Makefile
+++++ b/arch/arm64/boot/dts/allwinner/Makefile
++@@ -16,6 +16,7 @@ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-bananapi-m2-plus-v1.2.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-emlid-neutis-n5-devboard.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-libretech-all-h3-cc.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-nanopi-neo2.dtb
+++dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-nanopi-r1s.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-nanopi-neo-plus2.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-orangepi-pc2.dtb
++ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-orangepi-prime.dtb
++--- /dev/null
+++++ b/arch/arm64/boot/dts/allwinner/sun50i-h5-nanopi-r1s.dts
++@@ -0,0 +1,226 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Copyright (C) 2019 Igor Pecovnik <igor@armbian.com>
+++ * Copyright (C) 2020 Jayantajit Gogoi <jayanta.gogoi525@gmail.com>
+++ */
+++
+++/dts-v1/;
+++#include "sun50i-h5.dtsi"
+++
+++#include <dt-bindings/gpio/gpio.h>
+++#include <dt-bindings/input/input.h>
+++
+++/ {
+++	model = "FriendlyARM NanoPi R1S";
+++	compatible = "friendlyarm,nanopi-r1s", "allwinner,sun50i-h5";
+++
+++	aliases {
+++		ethernet0 = &emac;
+++		serial0 = &uart0;
+++	};
+++
+++	chosen {
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	reg_gmac_3v3: gmac-3v3 {
+++		compatible = "regulator-fixed";
+++		regulator-name = "gmac-3v3";
+++		regulator-min-microvolt = <3300000>;
+++		regulator-max-microvolt = <3300000>;
+++		startup-delay-us = <100000>;
+++		enable-active-high;
+++		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>;
+++	};
+++
+++	reg_vcc3v3: vcc3v3 {
+++		compatible = "regulator-fixed";
+++		regulator-name = "vcc3v3";
+++		regulator-min-microvolt = <3300000>;
+++		regulator-max-microvolt = <3300000>;
+++	};
+++
+++	reg_usb0_vbus: usb0-vbus {
+++		compatible = "regulator-fixed";
+++		regulator-name = "usb0-vbus";
+++		regulator-min-microvolt = <5000000>;
+++		regulator-max-microvolt = <5000000>;
+++		enable-active-high;
+++		gpio = <&r_pio 0 2 GPIO_ACTIVE_HIGH>; /* PL2 */
+++		status = "okay";
+++	};
+++
+++	vdd_cpux: gpio-regulator {
+++		compatible = "regulator-gpio";
+++		pinctrl-names = "default";
+++		regulator-name = "vdd-cpux";
+++		regulator-type = "voltage";
+++		regulator-boot-on;
+++		regulator-always-on;
+++		regulator-min-microvolt = <1100000>;
+++		regulator-max-microvolt = <1300000>;
+++		regulator-ramp-delay = <50>;
+++		gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>;
+++		gpios-states = <0x1>;
+++		states = <1100000 0x0
+++			  1300000 0x1>;
+++	};
+++
+++	wifi_pwrseq: wifi_pwrseq {
+++		compatible = "mmc-pwrseq-simple";
+++		pinctrl-names = "default";
+++		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>;
+++	};
+++
+++	leds {
+++		compatible = "gpio-leds";
+++
+++		status {
+++			label = "nanopi:red:status";
+++			gpios = <&pio 0 10 GPIO_ACTIVE_HIGH>;
+++			linux,default-trigger = "heartbeat";
+++		};
+++
+++		wan {
+++			label = "nanopi:green:wan";
+++			gpios = <&pio 6 11 GPIO_ACTIVE_HIGH>;
+++		};
+++
+++		lan {
+++			label = "nanopi:green:lan";
+++			gpios = <&pio 0 9 GPIO_ACTIVE_HIGH>;
+++		};
+++	};
+++
+++	r_gpio_keys {
+++		compatible = "gpio-keys";
+++		pinctrl-names = "default";
+++		pinctrl-0 = <&sw_r_npi>;
+++
+++		reset {
+++			label = "reset";
+++			linux,code = <KEY_RESTART>;
+++			gpios = <&r_pio 0 3 GPIO_ACTIVE_LOW>;
+++		};
+++	};
+++};
+++
+++&cpu0 {
+++	cpu-supply = <&vdd_cpux>;
+++};
+++
+++&ehci1 {
+++	status = "okay";
+++
+++	usb-eth@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8153";
+++
+++		realtek,led-data = <0x78>;
+++	};
+++};
+++
+++&ehci2 {
+++	status = "okay";
+++};
+++
+++&ehci3 {
+++	status = "disabled";
+++};
+++
+++&emac {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&emac_rgmii_pins>;
+++	phy-supply = <&reg_gmac_3v3>;
+++	phy-handle = <&ext_rgmii_phy>;
+++	phy-mode = "rgmii";
+++	status = "okay";
+++};
+++
+++&external_mdio {
+++	ext_rgmii_phy: ethernet-phy@7 {
+++		compatible = "ethernet-phy-ieee802.3-c22";
+++		reg = <7>;
+++	};
+++};
+++
+++&i2c0 {
+++	status = "okay";
+++
+++	eeprom@51 {
+++		compatible = "microchip,24c02";
+++		reg = <0x51>;
+++		pagesize = <16>;
+++	};
+++};
+++
+++&mmc0 {
+++	vmmc-supply = <&reg_vcc3v3>;
+++	bus-width = <4>;
+++	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
+++	status = "okay";
+++};
+++
+++&mmc1 {
+++	vmmc-supply = <&reg_vcc3v3>;
+++	vqmmc-supply = <&reg_vcc3v3>;
+++	mmc-pwrseq = <&wifi_pwrseq>;
+++	bus-width = <4>;
+++	non-removable;
+++	status = "okay";
+++
+++	rtl8189etv: sdio_wifi@1 {
+++		reg = <1>;
+++		compatible = "realtek,rtl8189es";
+++		interrupt-parent = <&pio>;
+++		interrupts = <6 10 IRQ_TYPE_LEVEL_LOW>;
+++		interrupt-names = "host-wake";
+++	};
+++};
+++
+++&mmc2 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&mmc2_8bit_pins>;
+++	vmmc-supply = <&reg_vcc3v3>;
+++	vqmmc-supply = <&reg_vcc3v3>;
+++	bus-width = <8>;
+++	non-removable;
+++	status = "disabled";
+++};
+++
+++&ohci1 {
+++	status = "disabled";
+++};
+++
+++&ohci2 {
+++	status = "okay";
+++};
+++
+++&ohci3 {
+++	status = "disabled";
+++};
+++
+++&r_pio {
+++	sw_r_npi: key_pins {
+++		pins = "PL3";
+++		function = "gpio_in";
+++	};
+++};
+++
+++&uart0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&uart0_pa_pins>;
+++	status = "okay";
+++};
+++
+++&usb_otg {
+++	dr_mode = "peripheral";
+++	status = "okay";
+++};
+++
+++&usbphy {
+++	/* USB Type-A port's VBUS is always on */
+++	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
+++	usb0_vbus-supply = <&reg_usb0_vbus>;
+++	status = "okay";
+++};

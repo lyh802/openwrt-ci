@@ -1,0 +1,265 @@
+From 1727f73793cac3e3fc24fdcf70d5bf00cb56ce0c Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:13:16 +0000
+Subject: [PATCH] add ath79 support
+
+---
+ .../dts/ar9331_tplink_tl-wr741nd-v4.dtsi      | 20 +++++++++----------
+ target/linux/ath79/dts/ar9341_tplink.dtsi     | 15 +++++++-------
+ .../ath79/dts/ar9341_tplink_tl-wr841-v8.dts   |  6 +++---
+ .../ath79/dts/qca9533_tplink_tl-wr841.dtsi    |  6 +++---
+ target/linux/ath79/image/tiny-tp-link.mk      |  6 +++---
+ .../ath79/tiny/base-files/etc/board.d/01_leds | 16 +++++++--------
+ .../tiny/base-files/etc/board.d/02_network    |  4 ++--
+ 7 files changed, 37 insertions(+), 36 deletions(-)
+
+diff --git a/target/linux/ath79/dts/ar9331_tplink_tl-wr741nd-v4.dtsi b/target/linux/ath79/dts/ar9331_tplink_tl-wr741nd-v4.dtsi
+index e460e4cd23..460b36b3c3 100644
+--- a/target/linux/ath79/dts/ar9331_tplink_tl-wr741nd-v4.dtsi
++++ b/target/linux/ath79/dts/ar9331_tplink_tl-wr741nd-v4.dtsi
+@@ -43,22 +43,22 @@
+ 
+ 		lan1 {
+ 			label = "green:lan1";
+-			gpios = <&gpio 14 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
+ 		};
+ 
+ 		lan2 {
+ 			label = "green:lan2";
+-			gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio 14 GPIO_ACTIVE_HIGH>;
+ 		};
+ 
+ 		lan3 {
+ 			label = "green:lan3";
+-			gpios = <&gpio 16 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
+ 		};
+ 
+ 		lan4 {
+ 			label = "green:lan4";
+-			gpios = <&gpio 17 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 16 GPIO_ACTIVE_HIGH>;
+ 		};
+ 
+ 		qss {
+@@ -73,7 +73,7 @@
+ 
+ 		wan {
+ 			label = "green:wan";
+-			gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio 17 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		wlan {
+@@ -105,12 +105,12 @@
+ 
+ 			firmware: partition@20000 {
+ 				compatible = "tplink,firmware";
+-				reg = <0x20000 0x3d0000>;
++				reg = <0x20000 0x7d0000>;
+ 				label = "firmware";
+ 			};
+ 
+-			art: partition@3f0000 {
+-				reg = <0x3f0000 0x10000>;
++			art: partition@7f0000 {
++				reg = <0x7f0000 0x10000>;
+ 				label = "art";
+ 				read-only;
+ 			};
+@@ -127,8 +127,8 @@
+ 	gmac-config {
+ 		device = <&gmac>;
+ 
+-		switch-phy-addr-swap = <1>;
+-		switch-phy-swap = <1>;
++		switch-phy-addr-swap = <0>;
++		switch-phy-swap = <0>;
+ 	};
+ };
+ 
+diff --git a/target/linux/ath79/dts/ar9341_tplink.dtsi b/target/linux/ath79/dts/ar9341_tplink.dtsi
+index 26410bcc11..c0790bf3b6 100644
+--- a/target/linux/ath79/dts/ar9341_tplink.dtsi
++++ b/target/linux/ath79/dts/ar9341_tplink.dtsi
+@@ -36,27 +36,27 @@
+ 
+ 		wan {
+ 			label = "green:wan";
+-			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 12 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		lan1 {
+ 			label = "green:lan1";
+-			gpios = <&gpio 19 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		lan2 {
+ 			label = "green:lan2";
+-			gpios = <&gpio 20 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 19 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		lan3 {
+ 			label = "green:lan3";
+-			gpios = <&gpio 21 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 20 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		lan4 {
+ 			label = "green:lan4";
+-			gpios = <&gpio 12 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio 21 GPIO_ACTIVE_LOW>;
+ 		};
+ 	};
+ };
+@@ -79,7 +79,7 @@
+ &eth0 {
+ 	status = "okay";
+ 
+-	phy-handle = <&swphy0>;
++	phy-handle = <&swphy4>;
+ 
+ 	mtd-mac-address = <&uboot 0x1fc00>;
+ 	mtd-mac-address-increment = <(-1)>;
+@@ -90,7 +90,8 @@
+ 
+ 	gmac-config {
+ 		device = <&gmac>;
+-		switch-phy-swap = <1>;
++		switch-phy-swap = <0>;
++		switch-only-mode = <1>;
+ 	};
+ };
+ 
+diff --git a/target/linux/ath79/dts/ar9341_tplink_tl-wr841-v8.dts b/target/linux/ath79/dts/ar9341_tplink_tl-wr841-v8.dts
+index cd7532d27a..12b4f4f6fe 100644
+--- a/target/linux/ath79/dts/ar9341_tplink_tl-wr841-v8.dts
++++ b/target/linux/ath79/dts/ar9341_tplink_tl-wr841-v8.dts
+@@ -48,12 +48,12 @@
+ 			partition@20000 {
+ 				compatible = "tplink,firmware";
+ 				label = "firmware";
+-				reg = <0x020000 0x3d0000>;
++				reg = <0x020000 0x7d0000>;
+ 			};
+ 
+-			art: partition@3f0000 {
++			art: partition@7f0000 {
+ 				label = "art";
+-				reg = <0x3f0000 0x010000>;
++				reg = <0x7f0000 0x010000>;
+ 				read-only;
+ 			};
+ 		};
+diff --git a/target/linux/ath79/dts/qca9533_tplink_tl-wr841.dtsi b/target/linux/ath79/dts/qca9533_tplink_tl-wr841.dtsi
+index 4166686795..81317a37b8 100644
+--- a/target/linux/ath79/dts/qca9533_tplink_tl-wr841.dtsi
++++ b/target/linux/ath79/dts/qca9533_tplink_tl-wr841.dtsi
+@@ -91,12 +91,12 @@
+ 			partition@20000 {
+ 				compatible = "tplink,firmware";
+ 				label = "firmware";
+-				reg = <0x020000 0x3d0000>;
++				reg = <0x020000 0x7d0000>;
+ 			};
+ 
+-			art: partition@3f0000 {
++			art: partition@7f0000 {
+ 				label = "art";
+-				reg = <0x3f0000 0x010000>;
++				reg = <0x7f0000 0x010000>;
+ 				read-only;
+ 			};
+ 		};
+diff --git a/target/linux/ath79/image/tiny-tp-link.mk b/target/linux/ath79/image/tiny-tp-link.mk
+index c918c6baa6..655d868d70 100644
+--- a/target/linux/ath79/image/tiny-tp-link.mk
++++ b/target/linux/ath79/image/tiny-tp-link.mk
+@@ -284,7 +284,7 @@ endef
+ TARGET_DEVICES += tplink_tl-wr741-v1
+ 
+ define Device/tplink_tl-wr741nd-v4
+-  $(Device/tplink-4mlzma)
++  $(Device/tplink-8mlzma)
+   SOC := ar9331
+   DEVICE_MODEL := TL-WR741N/ND
+   DEVICE_VARIANT := v4
+@@ -348,7 +348,7 @@ endef
+ TARGET_DEVICES += tplink_tl-wr841-v7
+ 
+ define Device/tplink_tl-wr841-v8
+-  $(Device/tplink-4mlzma)
++  $(Device/tplink-8mlzma)
+   SOC := ar9341
+   DEVICE_MODEL := TL-WR841N/ND
+   DEVICE_VARIANT := v8
+@@ -358,7 +358,7 @@ endef
+ TARGET_DEVICES += tplink_tl-wr841-v8
+ 
+ define Device/tplink_tl-wr841-v9
+-  $(Device/tplink-4mlzma)
++  $(Device/tplink-8mlzma)
+   SOC := qca9533
+   DEVICE_MODEL := TL-WR841N/ND
+   DEVICE_VARIANT := v9
+diff --git a/target/linux/ath79/tiny/base-files/etc/board.d/01_leds b/target/linux/ath79/tiny/base-files/etc/board.d/01_leds
+index f0b4acf066..8733f0e96b 100755
+--- a/target/linux/ath79/tiny/base-files/etc/board.d/01_leds
++++ b/target/linux/ath79/tiny/base-files/etc/board.d/01_leds
+@@ -68,10 +68,10 @@ tplink,tl-wr740n-v5|\
+ tplink,tl-wr741nd-v4|\
+ tplink,tl-wr841-v8)
+ 	ucidef_set_led_netdev "wan" "WAN" "green:wan" "eth1"
+-	ucidef_set_led_switch "lan1" "LAN1" "green:lan1" "switch0" "0x04"
+-	ucidef_set_led_switch "lan2" "LAN2" "green:lan2" "switch0" "0x08"
+-	ucidef_set_led_switch "lan3" "LAN3" "green:lan3" "switch0" "0x10"
+-	ucidef_set_led_switch "lan4" "LAN4" "green:lan4" "switch0" "0x02"
++	ucidef_set_led_switch "lan1" "LAN1" "green:lan1" "switch0" "0x02"
++	ucidef_set_led_switch "lan2" "LAN2" "green:lan2" "switch0" "0x04"
++	ucidef_set_led_switch "lan3" "LAN3" "green:lan3" "switch0" "0x08"
++	ucidef_set_led_switch "lan4" "LAN4" "green:lan4" "switch0" "0x10"
+ 	;;
+ tplink,tl-mr3420-v3|\
+ tplink,tl-wr841-v9|\
+@@ -79,10 +79,10 @@ tplink,tl-wr841-v10|\
+ tplink,tl-wr841-v11|\
+ tplink,tl-wr841-v12)
+ 	ucidef_set_led_netdev "wan" "WAN" "green:wan" "eth1"
+-	ucidef_set_led_switch "lan1" "LAN1" "green:lan1" "switch0" "0x10"
+-	ucidef_set_led_switch "lan2" "LAN2" "green:lan2" "switch0" "0x08"
+-	ucidef_set_led_switch "lan3" "LAN3" "green:lan3" "switch0" "0x04"
+-	ucidef_set_led_switch "lan4" "LAN4" "green:lan4" "switch0" "0x02"
++	ucidef_set_led_switch "lan1" "LAN1" "green:lan1" "switch0" "0x02"
++	ucidef_set_led_switch "lan2" "LAN2" "green:lan2" "switch0" "0x04"
++	ucidef_set_led_switch "lan3" "LAN3" "green:lan3" "switch0" "0x08"
++	ucidef_set_led_switch "lan4" "LAN4" "green:lan4" "switch0" "0x10"
+ 	;;
+ tplink,tl-wa850re-v1|\
+ tplink,tl-wa850re-v2)
+diff --git a/target/linux/ath79/tiny/base-files/etc/board.d/02_network b/target/linux/ath79/tiny/base-files/etc/board.d/02_network
+index cca6352023..ef5f3d5132 100755
+--- a/target/linux/ath79/tiny/base-files/etc/board.d/02_network
++++ b/target/linux/ath79/tiny/base-files/etc/board.d/02_network
+@@ -72,7 +72,7 @@ ath79_setup_interfaces()
+ 	tplink,tl-wr941nd-v6)
+ 		ucidef_set_interface_wan "eth1"
+ 		ucidef_add_switch "switch0" \
+-			"0@eth0" "1:lan:4" "2:lan:3" "3:lan:2" "4:lan:1"
++			"0@eth0" "1:lan:1" "2:lan:2" "3:lan:3" "4:lan:4"
+ 		;;
+ 	tplink,tl-mr3420-v2|\
+ 	tplink,tl-wr740n-v4|\
+@@ -81,7 +81,7 @@ ath79_setup_interfaces()
+ 	tplink,tl-wr841-v8)
+ 		ucidef_set_interface_wan "eth1"
+ 		ucidef_add_switch "switch0" \
+-			"0@eth0" "1:lan:4" "2:lan:1" "3:lan:2" "4:lan:3"
++			"0@eth0" "1:lan:1" "2:lan:2" "3:lan:3" "4:lan:4"
+ 		;;
+ 	tplink,tl-wr941-v2)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"

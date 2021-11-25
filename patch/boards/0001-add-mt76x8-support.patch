@@ -1,0 +1,22 @@
+From e2c8fb89dfb56f2cf92b6015972c5e9de03a8f4f Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:13:51 +0000
+Subject: [PATCH] add mt76x8 support
+
+---
+ target/linux/ramips/mt76x8/base-files/etc/board.d/02_network | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network b/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
+index 82794be60b..bb2ac45438 100755
+--- a/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
++++ b/target/linux/ramips/mt76x8/base-files/etc/board.d/02_network
+@@ -62,7 +62,7 @@ ramips_setup_interfaces()
+ 		;;
+ 	glinet,gl-mt300n-v2)
+ 		ucidef_add_switch "switch0" \
+-			"1:lan" "0:wan" "6@eth0"
++			"0:wan" "1:lan" "6@eth0"
+ 		;;
+ 	hilink,hlk-7628n|\
+ 	hilink,hlk-7688a|\
