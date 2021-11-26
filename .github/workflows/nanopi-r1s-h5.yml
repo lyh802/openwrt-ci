@@ -1,0 +1,107 @@
+# This is a basic workflow to help you get started with Actions
+
+name: NanoPi-R1S-H5 OpenWrt Build
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches:
+      - master
+
+  # Allows you to run this workflow manually from the Actions tab
+  release:
+    types:
+      - published
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-20.04
+
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          ref: master
+          path: ./openwrt-ci
+
+      # Runs a set of commands using the runners shell
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt update
+          sudo -E apt -y install subversion build-essential autoconf automake libncurses5-dev zlib1g-dev gawk git ccache gettext help2man texinfo libssl-dev xsltproc wget unzip python python3 ocaml-nox golang npm
+          sudo -E apt -y autoremove --purge
+          sudo -E apt clean
+
+      - name: Download Source
+        uses: actions/checkout@v2
+        with:
+          repository: openwrt/openwrt
+          ref: v21.02.1
+          path: ./openwrt
+
+      - name: Update Feeds
+        run: |
+          cd ./openwrt
+          sed -i 's/git.openwrt.org\/feed/github.com\/openwrt/g' ./feeds.conf.default
+          sed -i 's/git.openwrt.org\/project/github.com\/openwrt/g' ./feeds.conf.default
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          df -h
+
+      - name: Custom Configure File
+        run: |
+          cd ./openwrt
+          rm -f ./.config*
+          cp ../openwrt-ci/config/sunxi-cortexa53.config ./.config
+          # sed -i "s/^\(.*=m\)\$/#\1/g" ./.config
+
+          git apply ../openwrt-ci/patch/configs/0001-config-base-file.patch
+          git apply ../openwrt-ci/patch/configs/0002-config-mac80211.patch
+          git apply ../openwrt-ci/patch/boards/0001-add-rtl8152-for-sunxi.patch
+          git apply ../openwrt-ci/patch/boards/0001-add-NanoPi-R1S-H5-device.patch
+          git apply ../openwrt-ci/patch/drivers/0001-add-rtl8189es-driver.patch
+          git apply ../openwrt-ci/patch/applications/0001-add-microsocks.patch
+
+          cd ./feeds/luci
+          git apply ../../../openwrt-ci/patch/configs/0001-config-luci.patch
+          cd ../../feeds/packages
+          git apply ../../../openwrt-ci/patch/configs/0001-config-package.patch
+
+      - name: Download Package
+        if: always()
+        run: |
+          cd ./openwrt
+          make download -j$(nproc)
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Build OpenWrt
+        run: |
+          cd ./openwrt
+          make -j$(nproc) V=s
+          df -h
+          du -h --max-depth=1 ./ --exclude=build_dir --exclude=bin
+          du -h --max-depth=1 ./build_dir
+          du -h --max-depth=1 ./bin
+
+      - name: Assemble Artifact
+        run: |
+          rm -rf ./artifact
+          mkdir -p ./artifact
+          find ./openwrt/bin -name "openwrt-*"
+          find ./openwrt/bin -name "openwrt-*.img.gz" | xargs -i mv -f {} ./artifact/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: NanoPi-R1S-H5_v21.02.1
+          path: ./artifact
