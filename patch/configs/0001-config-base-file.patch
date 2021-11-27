@@ -1,0 +1,118 @@
+From 069dc7ffa7ed48ad6bfb6cc082dc6368391c402e Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 06:37:52 +0000
+Subject: [PATCH] config base-file
+
+---
+ package/base-files/files/bin/config_generate  | 23 +++++++++++--------
+ package/base-files/files/etc/shadow           |  2 +-
+ .../mac80211/files/lib/wifi/mac80211.sh       |  8 ++++---
+ package/libs/ncurses/Makefile                 |  2 +-
+ 4 files changed, 21 insertions(+), 14 deletions(-)
+
+diff --git a/package/base-files/files/bin/config_generate b/package/base-files/files/bin/config_generate
+index 3bf48d7216..fe06e5fa90 100755
+--- a/package/base-files/files/bin/config_generate
++++ b/package/base-files/files/bin/config_generate
+@@ -60,7 +60,7 @@ generate_static_network() {
+ 	fi
+ }
+ 
+-addr_offset=2
++addr_offset=4
+ generate_network() {
+ 	local ifname macaddr protocol type ipaddr netmask
+ 
+@@ -100,8 +100,8 @@ generate_network() {
+ 		static)
+ 			local ipad
+ 			case "$1" in
+-				lan) ipad=${ipaddr:-"192.168.1.1"} ;;
+-				*) ipad=${ipaddr:-"192.168.$((addr_offset++)).1"} ;;
++				lan) ipad=${ipaddr:-"10.1.4.10"} ;;
++				*) ipad=${ipaddr:-"10.1.$((++addr_offset)).10"} ;;
+ 			esac
+ 
+ 			netm=${netmask:-"255.255.255.0"}
+@@ -241,8 +241,9 @@ generate_static_system() {
+ 	uci -q batch <<-EOF
+ 		delete system.@system[0]
+ 		add system system
+-		set system.@system[-1].hostname='OpenWrt'
+-		set system.@system[-1].timezone='UTC'
++		set system.@system[-1].hostname="OpenWrt-$(cat /sys/class/net/wlan0/address | awk -F ":" '{ print $5""$6 }'| tr a-z A-Z)"
++		set system.@system[-1].timezone='CST-8'
++		set system.@system[-1].zonename='Asia/Shanghai'
+ 		set system.@system[-1].ttylogin='0'
+ 		set system.@system[-1].log_size='64'
+ 		set system.@system[-1].urandom_seed='0'
+@@ -251,10 +252,14 @@ generate_static_system() {
+ 		set system.ntp='timeserver'
+ 		set system.ntp.enabled='1'
+ 		set system.ntp.enable_server='0'
+-		add_list system.ntp.server='0.openwrt.pool.ntp.org'
+-		add_list system.ntp.server='1.openwrt.pool.ntp.org'
+-		add_list system.ntp.server='2.openwrt.pool.ntp.org'
+-		add_list system.ntp.server='3.openwrt.pool.ntp.org'
++		#add_list system.ntp.server='0.openwrt.pool.ntp.org'
++		#add_list system.ntp.server='1.openwrt.pool.ntp.org'
++		#add_list system.ntp.server='2.openwrt.pool.ntp.org'
++		#add_list system.ntp.server='3.openwrt.pool.ntp.org'
++		add_list system.ntp.server='time1.aliyun.com'
++		add_list system.ntp.server='cn.pool.ntp.org'
++		add_list system.ntp.server='time1.apple.com'
++		add_list system.ntp.server='120.24.166.46'
+ 	EOF
+ 
+ 	if json_is_a system object; then
+diff --git a/package/base-files/files/etc/shadow b/package/base-files/files/etc/shadow
+index 4b4154f21f..abcc78f7c7 100644
+--- a/package/base-files/files/etc/shadow
++++ b/package/base-files/files/etc/shadow
+@@ -1,4 +1,4 @@
+-root::0:0:99999:7:::
++root:$1$y7GVQbc/$gLNTBJyxnKD94ltmc/rWR0:0:0:99999:7:::
+ daemon:*:0:0:99999:7:::
+ ftp:*:0:0:99999:7:::
+ network:*:0:0:99999:7:::
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index 511a9188db..5d90ccb2d4 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -109,18 +109,20 @@ detect_mac80211() {
+ 		uci -q batch <<-EOF
+ 			set wireless.radio${devidx}=wifi-device
+ 			set wireless.radio${devidx}.type=mac80211
++			set wireless.radio${devidx}.country=CN
+ 			set wireless.radio${devidx}.channel=${channel}
+ 			set wireless.radio${devidx}.hwmode=11${mode_band}
+ 			${dev_id}
+ 			${ht_capab}
+-			set wireless.radio${devidx}.disabled=1
++			set wireless.radio${devidx}.disabled=0
+ 
+ 			set wireless.default_radio${devidx}=wifi-iface
+ 			set wireless.default_radio${devidx}.device=radio${devidx}
+ 			set wireless.default_radio${devidx}.network=lan
+ 			set wireless.default_radio${devidx}.mode=ap
+-			set wireless.default_radio${devidx}.ssid=OpenWrt
+-			set wireless.default_radio${devidx}.encryption=none
++			set wireless.default_radio${devidx}.ssid="OpenWrt-2.4G-$(cat /sys/class/ieee80211/${dev}/macaddress | awk -F ":" '{ print $1""$5""$6 }'| tr a-z A-Z)"
++			set wireless.default_radio${devidx}.encryption=psk2
++			set wireless.default_radio${devidx}.key=rootroot
+ EOF
+ 		uci -q commit wireless
+ 
+diff --git a/package/libs/ncurses/Makefile b/package/libs/ncurses/Makefile
+index e22eb2b893..232640b74f 100644
+--- a/package/libs/ncurses/Makefile
++++ b/package/libs/ncurses/Makefile
+@@ -38,7 +38,7 @@ define Package/libncurses
+   CATEGORY:=Libraries
+   TITLE:=Terminal handling library (Unicode)
+   URL:=http://www.gnu.org/software/ncurses/
+-  PROVIDES:=libncursesw
++  PROVIDES:=libncursesw libncursesw6
+   DEPENDS:= +terminfo
+   ABI_VERSION:=6
+ endef

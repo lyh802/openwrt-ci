@@ -1,0 +1,521 @@
+From b7c0df22c13465267781543055e4c2c5fbf192f2 Mon Sep 17 00:00:00 2001
+From: lyh802 <lyh802@126.com>
+Date: Thu, 25 Nov 2021 08:42:13 +0800
+Subject: [PATCH] add dropbear
+
+---
+ package/network/services/dropbear/Config.in   |  34 ++++-
+ package/network/services/dropbear/Makefile    | 121 ++++++++++++------
+ .../services/dropbear/files/dropbear.failsafe |   8 ++
+ .../services/dropbear/files/dropbear.init     |   8 +-
+ .../patches/001-fix-CVE-2020-36254.patch      |  21 ---
+ .../dropbear/patches/100-pubkey_path.patch    |   4 +-
+ .../dropbear/patches/110-change_user.patch    |   2 +-
+ .../dropbear/patches/160-lto-jobserver.patch  |   8 +-
+ .../patches/901-bundled-libs-cflags.patch     |  16 +--
+ ...nkey-fix-use-of-rsa-sha2-256-pubkeys.patch |  38 ++++++
+ 10 files changed, 183 insertions(+), 77 deletions(-)
+ create mode 100755 package/network/services/dropbear/files/dropbear.failsafe
+ delete mode 100644 package/network/services/dropbear/patches/001-fix-CVE-2020-36254.patch
+ create mode 100644 package/network/services/dropbear/patches/910-signkey-fix-use-of-rsa-sha2-256-pubkeys.patch
+
+diff --git a/package/network/services/dropbear/Config.in b/package/network/services/dropbear/Config.in
+index 61a04ec876..15000eff53 100644
+--- a/package/network/services/dropbear/Config.in
++++ b/package/network/services/dropbear/Config.in
+@@ -8,7 +8,7 @@ config DROPBEAR_CURVE25519
+ 		This enables the following key exchange algorithm:
+ 		  curve25519-sha256@libssh.org
+ 
+-		Increases binary size by about 8 kB uncompressed (MIPS).
++		Increases binary size by about 4 kB (MIPS).
+ 
+ config DROPBEAR_ECC
+ 	bool "Elliptic curve cryptography (ECC)"
+@@ -49,6 +49,24 @@ config DROPBEAR_ECC_FULL
+ 
+ 		Increases binary size by about 4 kB (MIPS).
+ 
++config DROPBEAR_ED25519
++	bool "Ed25519 support"
++	default y if !SMALL_FLASH
++	help
++		This enables the following public key algorithm:
++		  ssh-ed25519
++
++		Increases binary size by about 12 kB (MIPS).
++
++config DROPBEAR_CHACHA20POLY1305
++	bool "Chacha20-Poly1305 support"
++	default y
++	help
++		This enables the following authenticated encryption cipher:
++		  chacha20-poly1305@openssh.com
++
++		Increases binary size by about 4 kB (MIPS).
++
+ config DROPBEAR_ZLIB
+ 	bool "Enable compression"
+ 	default n
+@@ -77,4 +95,18 @@ config DROPBEAR_DBCLIENT
+ 	bool "Build dropbear with dbclient"
+ 	default y
+ 
++config DROPBEAR_SCP
++	bool "Build dropbear with scp"
++	default y
++
++config DROPBEAR_ASKPASS
++	bool "Enable askpass helper support"
++	default n
++	depends on DROPBEAR_DBCLIENT
++	help
++		This enables support for ssh-askpass helper in dropbear client
++		in order to authenticate on remote hosts.
++
++		Increases binary size by about 0.1 kB (MIPS).
++
+ endmenu
+diff --git a/package/network/services/dropbear/Makefile b/package/network/services/dropbear/Makefile
+index 63204042f7..8bbb26f829 100644
+--- a/package/network/services/dropbear/Makefile
++++ b/package/network/services/dropbear/Makefile
+@@ -1,5 +1,5 @@
+ #
+-# Copyright (C) 2006-2016 OpenWrt.org
++# Copyright (C) 2006-2020 OpenWrt.org
+ #
+ # This is free software, licensed under the GNU General Public License v2.
+ # See /LICENSE for more information.
+@@ -8,28 +8,31 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=dropbear
+-PKG_VERSION:=2019.78
++PKG_VERSION:=2020.81
+ PKG_RELEASE:=2
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+ PKG_SOURCE_URL:= \
+ 	http://matt.ucc.asn.au/dropbear/releases/ \
+ 	https://dropbear.nl/mirror/releases/
+-PKG_HASH:=525965971272270995364a0eb01f35180d793182e63dd0b0c3eb0292291644a4
++PKG_HASH:=48235d10b37775dbda59341ac0c4b239b82ad6318c31568b985730c788aac53b
+ 
+ PKG_LICENSE:=MIT
+ PKG_LICENSE_FILES:=LICENSE libtomcrypt/LICENSE libtommath/LICENSE
+ PKG_CPE_ID:=cpe:/a:matt_johnston:dropbear_ssh_server
+ 
+ PKG_BUILD_PARALLEL:=1
++PKG_ASLR_PIE_REGULAR:=1
+ PKG_USE_MIPS16:=0
+ PKG_FIXUP:=autoreconf
++PKG_FLAGS:=nonshared
+ 
+ PKG_CONFIG_DEPENDS:= \
+ 	CONFIG_TARGET_INIT_PATH CONFIG_DROPBEAR_ECC CONFIG_DROPBEAR_ECC_FULL \
+ 	CONFIG_DROPBEAR_CURVE25519 CONFIG_DROPBEAR_ZLIB \
++	CONFIG_DROPBEAR_ED25519 CONFIG_DROPBEAR_CHACHA20POLY1305 \
+ 	CONFIG_DROPBEAR_UTMP CONFIG_DROPBEAR_PUTUTLINE \
+-	CONFIG_DROPBEAR_DBCLIENT
++	CONFIG_DROPBEAR_DBCLIENT CONFIG_DROPBEAR_SCP CONFIG_DROPBEAR_ASKPASS
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+@@ -51,9 +54,11 @@ define Package/dropbear
+   CATEGORY:=Base system
+   TITLE:=Small SSH2 client/server
+   DEPENDS:= +DROPBEAR_ZLIB:zlib
+-  ALTERNATIVES:=\
+-	  100:/usr/bin/ssh:/usr/sbin/dropbear \
+-	  100:/usr/bin/scp:/usr/sbin/dropbear \
++  ALTERNATIVES:=
++  $(if $(CONFIG_DROPBEAR_SCP),ALTERNATIVES+= \
++	  100:/usr/bin/scp:/usr/sbin/dropbear,)
++  $(if $(CONFIG_DROPBEAR_DBCLIENT),ALTERNATIVES+= \
++	  100:/usr/bin/ssh:/usr/sbin/dropbear,)
+ 
+ endef
+ 
+@@ -62,6 +67,7 @@ define Package/dropbear/description
+ endef
+ 
+ define Package/dropbear/conffiles
++$(if $(CONFIG_DROPBEAR_ED25519),/etc/dropbear/dropbear_ed25519_host_key)
+ $(if $(CONFIG_DROPBEAR_ECC),/etc/dropbear/dropbear_ecdsa_host_key)
+ /etc/dropbear/dropbear_rsa_host_key
+ /etc/config/dropbear
+@@ -72,6 +78,7 @@ define Package/dropbearconvert
+   SECTION:=utils
+   CATEGORY:=Utilities
+   TITLE:=Utility for converting SSH keys
++  DEPENDS:= +DROPBEAR_ZLIB:zlib
+ endef
+ 
+ CONFIGURE_ARGS += \
+@@ -89,51 +96,90 @@ CONFIGURE_ARGS += \
+ 	$(if $(CONFIG_DROPBEAR_ZLIB),,--disable-zlib) \
+ 	--enable-bundled-libtom
+ 
++##############################################################################
++#
++#   option|value - add option to localoptions.h
++# !!option|value - replace option in sysoptions.h
++#
++##############################################################################
++
++# remove protocol idented software version number:
++# - LOCAL_IDENT
++# disable legacy/unsafe methods and unused functionality:
++# - INETD_MODE
++# - DROPBEAR_CLI_NETCAT
++# - DROPBEAR_DSS
++# - DO_MOTD
++DB_OPT_COMMON = \
++	DEFAULT_PATH|"$(TARGET_INIT_PATH)" \
++	!!LOCAL_IDENT|"SSH-2.0-dropbear" \
++	INETD_MODE|0 \
++	DROPBEAR_CLI_NETCAT|0 \
++	DROPBEAR_DSS|0 \
++	DO_MOTD|0 \
++
++
++##############################################################################
++#
++#   option|config|enabled|disabled = add option to localoptions.h
++# !!option|config|enabled|disabled = replace option in sysoptions.h
++#
++#   option := (config) ? enabled : disabled
++#
++##############################################################################
++
++DB_OPT_CONFIG = \
++	DROPBEAR_CURVE25519|CONFIG_DROPBEAR_CURVE25519|1|0 \
++	DROPBEAR_ED25519|CONFIG_DROPBEAR_ED25519|1|0 \
++	DROPBEAR_CHACHA20POLY1305|CONFIG_DROPBEAR_CHACHA20POLY1305|1|0 \
++	DROPBEAR_ECDSA|CONFIG_DROPBEAR_ECC|1|0 \
++	DROPBEAR_ECDH|CONFIG_DROPBEAR_ECC|1|0 \
++	!!DROPBEAR_ECC_384|CONFIG_DROPBEAR_ECC_FULL|1|0 \
++	!!DROPBEAR_ECC_521|CONFIG_DROPBEAR_ECC_FULL|1|0 \
++	DROPBEAR_CLI_ASKPASS_HELPER|CONFIG_DROPBEAR_ASKPASS|1|0 \
++
++
+ TARGET_CFLAGS += -DARGTYPE=3 -ffunction-sections -fdata-sections -flto
+ TARGET_LDFLAGS += -Wl,--gc-sections -flto=jobserver
+ 
++db_opt_add     =echo '\#define $(1) $(2)' >> $(PKG_BUILD_DIR)/localoptions.h
++db_opt_replace =$(ESED) 's,^(\#define $(1)) .*$$$$,\1 $(2),g' $(PKG_BUILD_DIR)/sysoptions.h
++
++define Build/Configure/dropbear_headers
++	$(strip $(foreach s,$(DB_OPT_COMMON), \
++	  $(if $(filter !!%,$(word 1,$(subst |, ,$(s)))), \
++	    $(call db_opt_replace,$(patsubst !!%,%,$(word 1,$(subst |, ,$(s)))),$(word 2,$(subst |, ,$(s)))), \
++	    $(call db_opt_add,$(word 1,$(subst |, ,$(s))),$(word 2,$(subst |, ,$(s)))) \
++	  ) ; \
++	))
++
++	$(strip $(foreach s,$(DB_OPT_CONFIG), \
++	  $(if $(filter !!%,$(word 1,$(subst |, ,$(s)))), \
++	    $(call db_opt_replace,$(patsubst !!%,%,$(word 1,$(subst |, ,$(s)))),$(if $($(word 2,$(subst |, ,$(s)))),$(word 3,$(subst |, ,$(s))),$(word 4,$(subst |, ,$(s))))), \
++	    $(call db_opt_add,$(word 1,$(subst |, ,$(s))),$(if $($(word 2,$(subst |, ,$(s)))),$(word 3,$(subst |, ,$(s))),$(word 4,$(subst |, ,$(s))))) \
++	  ) ; \
++	))
++endef
++
+ define Build/Configure
+ 	: > $(PKG_BUILD_DIR)/localoptions.h
+ 
+ 	$(Build/Configure/Default)
+ 
+-	echo '#define DEFAULT_PATH "$(TARGET_INIT_PATH)"' >> \
+-		$(PKG_BUILD_DIR)/localoptions.h
+-
+-	echo '#define DROPBEAR_CURVE25519 $(if $(CONFIG_DROPBEAR_CURVE25519),1,0)' >> \
+-		$(PKG_BUILD_DIR)/localoptions.h
+-
+-	for OPTION in DROPBEAR_ECDSA DROPBEAR_ECDH; do \
+-		echo "#define $$$$OPTION $(if $(CONFIG_DROPBEAR_ECC),1,0)" >> \
+-			$(PKG_BUILD_DIR)/localoptions.h; \
+-	done
+-
+-	# remove protocol idented software version number
+-	$(ESED) 's,^(#define LOCAL_IDENT) .*$$$$,\1 "SSH-2.0-dropbear",g' \
+-		$(PKG_BUILD_DIR)/sysoptions.h
+-
+-	# disable legacy/unsafe methods and unused functionality
+-	for OPTION in INETD_MODE DROPBEAR_CLI_NETCAT \
+-	DROPBEAR_3DES DROPBEAR_DSS DROPBEAR_ENABLE_CBC_MODE \
+-	DROPBEAR_SHA1_96_HMAC DROPBEAR_USE_PASSWORD_ENV; do \
+-		echo "#define $$$$OPTION 0" >> \
+-			$(PKG_BUILD_DIR)/localoptions.h; \
+-	done
+-
+-	# enable nistp384 and nistp521 only if full ECC support was requested
+-	for OPTION in DROPBEAR_ECC_384 DROPBEAR_ECC_521; do \
+-		$(ESED) 's,^(#define '$$$$OPTION') .*$$$$,\1 $(if $(CONFIG_DROPBEAR_ECC_FULL),1,0),g' \
+-		$(PKG_BUILD_DIR)/sysoptions.h; \
+-	done
++	$(Build/Configure/dropbear_headers)
+ 
+ 	# Enforce rebuild of svr-chansession.c
+ 	rm -f $(PKG_BUILD_DIR)/svr-chansession.o
++
++	# Rebuild them on config change
++	+$(MAKE) -C $(PKG_BUILD_DIR)/libtomcrypt clean
++	+$(MAKE) -C $(PKG_BUILD_DIR)/libtommath clean
+ endef
+ 
+ define Build/Compile
+ 	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
+ 		$(TARGET_CONFIGURE_OPTS) \
+-		PROGRAMS="dropbear $(if $(CONFIG_DROPBEAR_DBCLIENT),dbclient,) dropbearkey scp" \
++		PROGRAMS="dropbear $(if $(CONFIG_DROPBEAR_DBCLIENT),dbclient,) dropbearkey $(if $(CONFIG_DROPBEAR_SCP),scp,)" \
+ 		MULTI=1 SCPPROGRESS=1
+ 	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
+ 		$(TARGET_CONFIGURE_OPTS) \
+@@ -152,6 +198,9 @@ define Package/dropbear/install
+ 	$(INSTALL_BIN) ./files/dropbear.init $(1)/etc/init.d/dropbear
+ 	$(INSTALL_DIR) $(1)/usr/lib/opkg/info
+ 	$(INSTALL_DIR) $(1)/etc/dropbear
++	$(INSTALL_DIR) $(1)/lib/preinit
++	$(INSTALL_DATA) ./files/dropbear.failsafe $(1)/lib/preinit/99_10_failsafe_dropbear
++	$(if $(CONFIG_DROPBEAR_ED25519),touch $(1)/etc/dropbear/dropbear_ed25519_host_key)
+ 	$(if $(CONFIG_DROPBEAR_ECC),touch $(1)/etc/dropbear/dropbear_ecdsa_host_key)
+ 	touch $(1)/etc/dropbear/dropbear_rsa_host_key
+ endef
+diff --git a/package/network/services/dropbear/files/dropbear.failsafe b/package/network/services/dropbear/files/dropbear.failsafe
+new file mode 100755
+index 0000000000..a98ede459a
+--- /dev/null
++++ b/package/network/services/dropbear/files/dropbear.failsafe
+@@ -0,0 +1,8 @@
++#!/bin/sh
++
++failsafe_dropbear () {
++	dropbearkey -t rsa -s 1024 -f /tmp/dropbear_failsafe_host_key
++	dropbear -r /tmp/dropbear_failsafe_host_key <> /dev/null 2>&1
++}
++
++boot_hook_add failsafe failsafe_dropbear
+diff --git a/package/network/services/dropbear/files/dropbear.init b/package/network/services/dropbear/files/dropbear.init
+index 173ab09285..ab8e908d8c 100755
+--- a/package/network/services/dropbear/files/dropbear.init
++++ b/package/network/services/dropbear/files/dropbear.init
+@@ -66,7 +66,7 @@ hk_generate_as_needed()
+ 	kdir='/etc/dropbear'
+ 
+ 	kgen=''
+-	for ktype in ecdsa rsa; do
++	for ktype in ed25519 ecdsa rsa; do
+ 		hk_verify "${kdir}/dropbear_${ktype}_host_key" && continue
+ 
+ 		kgen="${kgen} ${ktype}"
+@@ -238,7 +238,7 @@ killclients()
+ 	while [ "${pid}" -ne 0 ]
+ 	 do
+ 		# get parent process id
+-		pid=`cut -d ' ' -f 4 "/proc/${pid}/stat"`
++		pid=$(cut -d ' ' -f 4 "/proc/${pid}/stat")
+ 		[ "${pid}" -eq 0 ] && break
+ 
+ 		# check if client connection
+@@ -249,14 +249,14 @@ killclients()
+ 	done
+ 
+ 	# get all server pids that should be ignored
+-	for server in `cat /var/run/${NAME}.*.pid`
++	for server in $(cat /var/run/${NAME}.*.pid)
+ 	 do
+ 		append ignore "${server}"
+ 	done
+ 
+ 	# get all running pids and kill client connections
+ 	local skip
+-	for pid in `pidof "${NAME}"`
++	for pid in $(pidof "${NAME}")
+ 	 do
+ 		# check if correct program, otherwise process next pid
+ 		grep -F -q -e "${PROG}" "/proc/${pid}/cmdline" || {
+diff --git a/package/network/services/dropbear/patches/001-fix-CVE-2020-36254.patch b/package/network/services/dropbear/patches/001-fix-CVE-2020-36254.patch
+deleted file mode 100644
+index 03f8bf9a81..0000000000
+--- a/package/network/services/dropbear/patches/001-fix-CVE-2020-36254.patch
++++ /dev/null
+@@ -1,21 +0,0 @@
+-From 8f8a3dff705fad774a10864a2e3dbcfa9779ceff Mon Sep 17 00:00:00 2001
+-From: Haelwenn Monnier <contact+github.com@hacktivis.me>
+-Date: Mon, 25 May 2020 14:54:29 +0200
+-Subject: [PATCH] scp.c: Port OpenSSH CVE-2018-20685 fix (#80)
+-
+----
+- scp.c | 3 ++-
+- 1 file changed, 2 insertions(+), 1 deletion(-)
+-
+---- a/scp.c
+-+++ b/scp.c
+-@@ -935,7 +935,8 @@ sink(int argc, char **argv)
+- 			size = size * 10 + (*cp++ - '0');
+- 		if (*cp++ != ' ')
+- 			SCREWUP("size not delimited");
+--		if ((strchr(cp, '/') != NULL) || (strcmp(cp, "..") == 0)) {
+-+		if (*cp == '\0' || strchr(cp, '/') != NULL ||
+-+		    strcmp(cp, ".") == 0 || strcmp(cp, "..") == 0) {
+- 			run_err("error: unexpected filename: %s", cp);
+- 			exit(1);
+- 		}
+diff --git a/package/network/services/dropbear/patches/100-pubkey_path.patch b/package/network/services/dropbear/patches/100-pubkey_path.patch
+index 732d84078f..af3fbb336b 100644
+--- a/package/network/services/dropbear/patches/100-pubkey_path.patch
++++ b/package/network/services/dropbear/patches/100-pubkey_path.patch
+@@ -1,6 +1,6 @@
+ --- a/svr-authpubkey.c
+ +++ b/svr-authpubkey.c
+-@@ -338,14 +338,19 @@ static int checkpubkey(const char* algo,
++@@ -386,14 +386,19 @@ static int checkpubkey(const char* keyal
+  		goto out;
+  	}
+  
+@@ -28,7 +28,7 @@
+  
+  #if DROPBEAR_SVR_MULTIUSER
+  	/* open the file as the authenticating user. */
+-@@ -426,27 +431,36 @@ static int checkpubkeyperms() {
++@@ -474,27 +479,36 @@ static int checkpubkeyperms() {
+  		goto out;
+  	}
+  
+diff --git a/package/network/services/dropbear/patches/110-change_user.patch b/package/network/services/dropbear/patches/110-change_user.patch
+index 27e7fbaf4f..1dd67948af 100644
+--- a/package/network/services/dropbear/patches/110-change_user.patch
++++ b/package/network/services/dropbear/patches/110-change_user.patch
+@@ -1,6 +1,6 @@
+ --- a/svr-chansession.c
+ +++ b/svr-chansession.c
+-@@ -953,12 +953,12 @@ static void execchild(const void *user_d
++@@ -954,12 +954,12 @@ static void execchild(const void *user_d
+  	/* We can only change uid/gid as root ... */
+  	if (getuid() == 0) {
+  
+diff --git a/package/network/services/dropbear/patches/160-lto-jobserver.patch b/package/network/services/dropbear/patches/160-lto-jobserver.patch
+index 02765335d3..1ba7dd6f44 100644
+--- a/package/network/services/dropbear/patches/160-lto-jobserver.patch
++++ b/package/network/services/dropbear/patches/160-lto-jobserver.patch
+@@ -1,11 +1,11 @@
+ --- a/Makefile.in
+ +++ b/Makefile.in
+-@@ -189,17 +189,17 @@ dropbearkey: $(dropbearkeyobjs)
++@@ -198,17 +198,17 @@ dropbearkey: $(dropbearkeyobjs)
+  dropbearconvert: $(dropbearconvertobjs)
+  
+  dropbear: $(HEADERS) $(LIBTOM_DEPS) Makefile
+--	$(CC) $(LDFLAGS) -o $@$(EXEEXT) $($@objs) $(LIBTOM_LIBS) $(LIBS) @CRYPTLIB@
+-+	+$(CC) $(LDFLAGS) -o $@$(EXEEXT) $($@objs) $(LIBTOM_LIBS) $(LIBS) @CRYPTLIB@
++-	$(CC) $(LDFLAGS) -o $@$(EXEEXT) $($@objs) $(LIBTOM_LIBS) $(LIBS) @CRYPTLIB@ $(PLUGIN_LIBS)
+++	+$(CC) $(LDFLAGS) -o $@$(EXEEXT) $($@objs) $(LIBTOM_LIBS) $(LIBS) @CRYPTLIB@ $(PLUGIN_LIBS)
+  
+  dbclient: $(HEADERS) $(LIBTOM_DEPS) Makefile
+ -	$(CC) $(LDFLAGS) -o $@$(EXEEXT) $($@objs) $(LIBTOM_LIBS) $(LIBS)
+@@ -22,7 +22,7 @@
+  
+  
+  # multi-binary compilation.
+-@@ -210,7 +210,7 @@ ifeq ($(MULTI),1)
++@@ -219,7 +219,7 @@ ifeq ($(MULTI),1)
+  endif
+  
+  dropbearmulti$(EXEEXT): $(HEADERS) $(MULTIOBJS) $(LIBTOM_DEPS) Makefile
+diff --git a/package/network/services/dropbear/patches/901-bundled-libs-cflags.patch b/package/network/services/dropbear/patches/901-bundled-libs-cflags.patch
+index 033aee3a06..2432b4ef72 100644
+--- a/package/network/services/dropbear/patches/901-bundled-libs-cflags.patch
++++ b/package/network/services/dropbear/patches/901-bundled-libs-cflags.patch
+@@ -1,6 +1,6 @@
+ --- a/libtomcrypt/makefile_include.mk
+ +++ b/libtomcrypt/makefile_include.mk
+-@@ -75,6 +75,13 @@ endif
++@@ -94,6 +94,13 @@ endif
+  
+  LTC_CFLAGS += -Wno-type-limits
+  
+@@ -14,7 +14,7 @@
+  ifdef LTC_DEBUG
+  $(info Debug build)
+  # compile for DEBUGGING (required for ccmalloc checking!!!)
+-@@ -102,6 +109,9 @@ endif
++@@ -121,6 +128,9 @@ endif
+  endif # COMPILE_SMALL
+  endif # COMPILE_DEBUG
+  
+@@ -26,8 +26,8 @@
+  LTC_CFLAGS += -Wno-typedef-redefinition -Wno-tautological-compare -Wno-builtin-requires-header -Wno-missing-field-initializers
+ --- a/libtommath/makefile_include.mk
+ +++ b/libtommath/makefile_include.mk
+-@@ -37,6 +37,9 @@ CFLAGS += -Wsystem-headers -Wdeclaration
+- CFLAGS += -Wstrict-prototypes -Wpointer-arith
++@@ -70,6 +70,9 @@ else
++ LTM_CFLAGS += -Wsystem-headers
+  endif
+  
+ +ifndef OPENWRT_BUILD
+@@ -35,14 +35,14 @@
+ +
+  ifdef COMPILE_DEBUG
+  #debug
+- CFLAGS += -g3
+-@@ -58,6 +61,9 @@ endif
++ LTM_CFLAGS += -g3
++@@ -90,6 +93,9 @@ endif
++ 
+  endif # COMPILE_SIZE
+- endif # COMPILE_DEBUG
+  
+ +  ### ! OPENWRT_BUILD
+ +endif
+ +
+  ifneq ($(findstring clang,$(CC)),)
+- CFLAGS += -Wno-typedef-redefinition -Wno-tautological-compare -Wno-builtin-requires-header
++ LTM_CFLAGS += -Wno-typedef-redefinition -Wno-tautological-compare -Wno-builtin-requires-header
+  endif
+diff --git a/package/network/services/dropbear/patches/910-signkey-fix-use-of-rsa-sha2-256-pubkeys.patch b/package/network/services/dropbear/patches/910-signkey-fix-use-of-rsa-sha2-256-pubkeys.patch
+new file mode 100644
+index 0000000000..b774a38b1a
+--- /dev/null
++++ b/package/network/services/dropbear/patches/910-signkey-fix-use-of-rsa-sha2-256-pubkeys.patch
+@@ -0,0 +1,38 @@
++From 667d9b75df86ec9ee1205f9101beb8dbbe4a00ae Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Petr=20=C5=A0tetiar?= <ynezz@true.cz>
++Date: Wed, 1 Jul 2020 11:38:33 +0200
++Subject: [PATCH] signkey: fix use of rsa-sha2-256 pubkeys
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Commit 972d723484d8 ("split signkey_type and signature_type for RSA sha1
++vs sha256") has added strict checking of pubkey algorithms which made
++keys with SHA-256 hashing algorithm unusable as they still reuse the
++`ssh-rsa` public key format. So fix this by disabling the check for
++rsa-sha2-256 pubkeys.
++
++Ref: https://tools.ietf.org/html/rfc8332#section-3
++Fixes: 972d723484d8 ("split signkey_type and signature_type for RSA sha1 vs sha256")
++Signed-off-by: Petr Štetiar <ynezz@true.cz>
++---
++ signkey.c | 8 ++++++--
++ 1 file changed, 6 insertions(+), 2 deletions(-)
++
++--- a/signkey.c
+++++ b/signkey.c
++@@ -657,8 +657,12 @@ int buf_verify(buffer * buf, sign_key *k
++ 	sigtype = signature_type_from_name(type_name, type_name_len);
++ 	m_free(type_name);
++ 
++-	if (expect_sigtype != sigtype) {
++-			dropbear_exit("Non-matching signing type");
+++	if (sigtype == DROPBEAR_SIGNATURE_NONE) {
+++		dropbear_exit("No signature type");
+++	}
+++
+++	if ((expect_sigtype != DROPBEAR_SIGNATURE_RSA_SHA256) && (expect_sigtype != sigtype)) {
+++		dropbear_exit("Non-matching signing type");
++ 	}
++ 
++ 	keytype = signkey_type_from_signature(sigtype);
